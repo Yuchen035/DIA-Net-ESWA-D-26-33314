@@ -1,0 +1,107 @@
+--- original/train/config/train_lora_config.yaml
++++ src/DIANet/train/config/train_lora_config.yaml
+@@ -74,8 +74,8 @@
+ # ============================================================================
+ dataset:
+   # 数据路径
+-  input_image_dir: "/data1/sdb/WXM/LLE_moe_lora/MyFlux/datasets/test/input"    # 输入图像文件夹
+-  target_image_dir: "/data1/sdb/WXM/LLE_moe_lora/MyFlux/datasets/test/output"  # 目标图像文件夹
++  input_image_dir: "__LOCAL_PROJECT_ROOT__/datasets/test/input"    # 输入图像文件夹
++  target_image_dir: "__LOCAL_PROJECT_ROOT__/datasets/test/output"  # 目标图像文件夹
+   
+   # 文本提示词
+   prompt: "Please convert the low-light image to a perfectly exposed photograph with bright, natural lighting and clear details."
+@@ -184,7 +184,7 @@
+   # 验证样本
+   validation_prompts:
+     - "Please convert the low-light image to a perfectly exposed photograph with bright, natural lighting and clear details."
+-  validation_image: "/data1/sdb/WXM/LLE_moe_lora/MyFlux/test/input/0.png"  # 验证图像路径
++  validation_image: "__LOCAL_PROJECT_ROOT__/test/input/0.png"  # 验证图像路径
+   
+   # 推理参数
+   num_inference_steps: 28
+
+--- original/inference/inference.py
++++ src/DIANet/inference/inference.py
+@@ -361,10 +361,10 @@
+     MODEL_PATH = "FLUX.1-Kontext-dev"
+ 
+     # 输入图像路径（你想要编辑的图像）
+-    INPUT_IMAGE_PATH = "/data1/sdb/WXM/LLE_moe_lora/MyFlux/test/input/0.png"
++    INPUT_IMAGE_PATH = "__LOCAL_PROJECT_ROOT__/test/input/0.png"
+ 
+     # 输出图像路径（生成的图像保存位置）
+-    OUTPUT_IMAGE_PATH = "/data1/sdb/WXM/LLE_moe_lora/MyFlux/test/output/0.png"
++    OUTPUT_IMAGE_PATH = "__LOCAL_PROJECT_ROOT__/test/output/0.png"
+ 
+     # 文本提示词（描述你想要的效果）
+     # 例如：
+
+--- original/inference/inference_lora.py
++++ src/DIANet/inference/inference_lora.py
+@@ -452,10 +452,10 @@
+     MODEL_PATH = "FLUX.1-Kontext-dev"
+ 
+     # 输入图像路径（你想要编辑的图像）
+-    INPUT_IMAGE_PATH = "/data1/sdb/WXM/LLE_moe_lora/MyFlux/test/input/0.png"
++    INPUT_IMAGE_PATH = "__LOCAL_PROJECT_ROOT__/test/input/0.png"
+ 
+     # 输出图像路径（生成的图像保存位置）
+-    OUTPUT_IMAGE_PATH = "/data1/sdb/WXM/LLE_moe_lora/MyFlux/test/output/0_lora.png"
++    OUTPUT_IMAGE_PATH = "__LOCAL_PROJECT_ROOT__/test/output/0_lora.png"
+ 
+     # 文本提示词（描述你想要的效果）
+     # 提示：如果使用特定 LoRA，可能需要添加触发词（trigger words）
+
+--- original/inference/inference_lora_part_module.py
++++ src/DIANet/inference/inference_lora_part_module.py
+@@ -525,8 +525,8 @@
+     MODEL_PATH = "FLUX.1-Kontext-dev"
+ 
+     # 输入/输出图像路径
+-    INPUT_IMAGE_PATH = "/data1/sdb/WXM/LLE_moe_lora/MyFlux/test/input/0.png"
+-    OUTPUT_IMAGE_PATH = "/data1/sdb/WXM/LLE_moe_lora/MyFlux/test/output/0_lora_single_stream.png"
++    INPUT_IMAGE_PATH = "__LOCAL_PROJECT_ROOT__/test/input/0.png"
++    OUTPUT_IMAGE_PATH = "__LOCAL_PROJECT_ROOT__/test/output/0_lora_single_stream.png"
+ 
+     # 文本提示词
+     PROMPT = "LLE. Please convert the image to a perfectly exposed photograph with bright, natural lighting and clear details."
+
+--- original/LLE/configs/small_test.yaml
++++ src/DIANet/LLE/configs/small_test.yaml
+@@ -4,7 +4,7 @@
+ 
+ # 模型配置
+ model:
+-  model_path: "/data1/sdb/WXM/LLE_moe_lora/MyFlux/FLUX.1-dev"  # FLUX模型路径（使用本地路径）
++  model_path: "__LOCAL_PROJECT_ROOT__/FLUX.1-dev"  # FLUX模型路径（使用本地路径）
+   base_model: "black-forest-labs/FLUX.1-dev"  # 基础模型（保留用于兼容）
+   dtype: "bfloat16"  # 数据类型
+   device: "cuda"  # 设备
+@@ -13,7 +13,7 @@
+   # PhotoDoodle预训练配置
+   photodoodle:
+     enabled: true  # 启用PhotoDoodle预训练
+-    lora_path: "/data1/sdb/WXM/LLE_moe_lora/MyFlux/lora_model/pretrain.safetensors"  # 预训练权重路径
++    lora_path: "__LOCAL_PROJECT_ROOT__/lora_model/pretrain.safetensors"  # 预训练权重路径
+     fuse_before_training: true  # 训练前融合LoRA权重
+     lora_scale: 1.0  # LoRA缩放因子
+ 
+
+--- original/LLE/test/test_real_flux_loader_lle.py
++++ src/DIANet/LLE/test/test_real_flux_loader_lle.py
+@@ -24,12 +24,12 @@
+ 
+     # 配置
+     config = SimpleNamespace(
+-        model_path="/data1/sdb/WXM/LLE_moe_lora/MyFlux/FLUX.1-dev",
++        model_path="__LOCAL_PROJECT_ROOT__/FLUX.1-dev",
+         device="cuda" if torch.cuda.is_available() else "cpu",
+         dtype="bfloat16",
+         photodoodle=SimpleNamespace(
+             enabled=True,
+-            lora_path="/data1/sdb/WXM/LLE_moe_lora/MyFlux/lora_model/pretrain.safetensors",
++            lora_path="__LOCAL_PROJECT_ROOT__/lora_model/pretrain.safetensors",
+             fuse_before_training=True,  # 融合到基础模型
+             lora_scale=1.0,
+             save_fused_model=False

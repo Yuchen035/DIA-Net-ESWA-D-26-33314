@@ -1,0 +1,65 @@
+# 小参数测试配置文件
+# 用于验证FLUX + PhotoDoodle + MoE-LoRA训练流程
+# 所有参数都设置为最小值以避免OOM
+
+# 模型配置
+model:
+  model_path: "__LOCAL_PROJECT_ROOT__/FLUX.1-dev"  # FLUX模型路径（使用本地路径）
+  base_model: "black-forest-labs/FLUX.1-dev"  # 基础模型（保留用于兼容）
+  dtype: "bfloat16"  # 数据类型
+  device: "cuda"  # 设备
+  low_cpu_mem_usage: true  # 使用低CPU内存模式
+
+  # PhotoDoodle预训练配置
+  photodoodle:
+    enabled: true  # 启用PhotoDoodle预训练
+    lora_path: "__LOCAL_PROJECT_ROOT__/lora_model/pretrain.safetensors"  # 预训练权重路径
+    fuse_before_training: true  # 训练前融合LoRA权重
+    lora_scale: 1.0  # LoRA缩放因子
+
+# 数据配置
+data:
+  input_image_dir: "./data/input"  # 输入图像目录（暗光图像）
+  target_image_dir: "./data/target"  # 目标图像目录（增强后图像）
+  prompt: "enhance the low-light image"  # 训练提示词（简化版）
+  resolution: 256  # 图像分辨率（降低到256以节省显存）
+  center_crop: true  # 中心裁剪
+  random_flip: false  # 关闭随机翻转（加快测试）
+  num_workers: 2  # 数据加载线程数（减少到2）
+
+# LoRA配置
+lora:
+  # 目标模块 - 只注入1个模块以最小化参数
+  target_modules:
+    - "single_transformer_blocks.0.attn.to_q"  # 只注入第1个single block的Q
+
+  rank: 1  # LoRA秩（最小值1）
+  alpha: 1.0  # LoRA缩放因子
+  dropout: 0.0  # 关闭dropout
+  init_method: "kaiming"  # 初始化方法
+
+# 训练配置
+train:
+  num_epochs: 2  # 训练轮数（减少到2轮仅用于测试）
+  batch_size: 1  # 批次大小
+  learning_rate: 1.0e-4  # 学习率
+  gradient_accumulation_steps: 1  # 梯度累积（减少到1）
+  max_grad_norm: 1.0  # 梯度裁剪阈值
+  max_sequence_length: 256  # T5最大序列长度（降低到256）
+  save_every_n_epochs: 1  # 每1个epoch保存一次（频繁保存用于测试）
+  cfg_scale: 3.5  # Classifier-free guidance scale
+
+# 保存配置
+save:
+  output_dir: "./outputs/small_test"  # 输出目录
+  save_dtype: "float16"  # 保存精度
+  save_total_limit: 2  # 最多保留2个检查点
+
+# 设备配置
+device: "cuda"  # 设备
+
+# 显存优化配置
+quantize: true  # 启用Transformer量化（int8）
+quantize_te: true  # 启用Text Encoder量化（int8）
+qtype: "int8"  # 量化类型：int8 或 fp8
+gradient_checkpointing: true  # 启用梯度检查点

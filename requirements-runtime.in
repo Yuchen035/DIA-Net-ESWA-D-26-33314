@@ -1,0 +1,26 @@
+# Source-derived dependency inventory, NOT the original environment or a
+# validated lockfile. See docs/DEPENDENCIES.md and docs/ENGINEERING.md.
+# Select a platform-compatible torch/torchvision pair before resolving these.
+torch>=1.13.0
+torchvision
+transformers>=4.41.2
+accelerate>=0.31.0
+optimum-quanto>=0.2.6
+numpy>=1.17
+Pillow
+PyYAML
+einops
+tqdm
+loguru
+safetensors>=0.3.1
+packaging>=20.0
+psutil
+huggingface-hub>=0.34.0,<2.0
+httpx<1.0.0
+importlib_metadata
+filelock
+requests
+regex!=2019.12.17
+setuptools
+# Install the supplied local PEFT/Diffusers packages separately (see guide).
+# Do not replace them with stock PyPI peft/diffusers packages.

@@ -1,0 +1,609 @@
+--- v01/src/DIANet/adapter_checkpoint.py
++++ v02/src/DIANet/adapter_checkpoint.py
+@@ -0,0 +1,212 @@
++"""Versioned, single-adapter checkpoints for the recovered engineering path.
++
++This is serialization glue, not a DIA-Net algorithm or a legacy-weight converter.
++The JSON sidecar is mandatory: expert configuration cannot be inferred safely
++from tensor shapes. Imports here are standard-library only; model libraries are
++imported only by the explicit save/load functions. Real-model round trips have
++not been validated by the source-package checks.
++"""
++import hashlib
++import json
++import os
++from collections.abc import Mapping
++from enum import Enum
++from pathlib import Path
++import tempfile
++
++FORMAT = "dia-net-adapter-v2"
++VERSION = 2
++MOE_FIELDS = {"num_experts", "expert_rank", "expert_alpha", "top_k",
++              "blc_alpha", "blc_weight", "module_modes"}
++
++
++def _jsonable(value):
++    if isinstance(value, Enum):
++        return _jsonable(value.value)
++    if isinstance(value, Mapping):
++        if not all(isinstance(key, str) for key in value):
++            raise ValueError("Checkpoint configuration keys must be strings.")
++        return {key: _jsonable(item) for key, item in value.items()}
++    if isinstance(value, (set, frozenset)):
++        return sorted((_jsonable(item) for item in value), key=_canonical)
++    if isinstance(value, (list, tuple)):
++        return [_jsonable(item) for item in value]
++    if value is None or isinstance(value, (str, int, float, bool)):
++        return value
++    raise ValueError("Non-JSON configuration value: " + type(value).__name__)
++
++
++def _canonical(value):
++    return json.dumps(value, sort_keys=True, separators=(",", ":"),
++                      ensure_ascii=False, allow_nan=False)
++
++
++def _sha256(path):
++    digest = hashlib.sha256()
++    with Path(path).open("rb") as stream:
++        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
++            digest.update(chunk)
++    return digest.hexdigest()
++
++
++def _config_digest(config):
++    return hashlib.sha256(_canonical(config).encode("utf-8")).hexdigest()
++
++
++def _base_config(transformer):
++    config = transformer.config
++    values = config.to_dict() if hasattr(config, "to_dict") else dict(config)
++    # Private metadata includes machine paths/library version, not architecture.
++    return _jsonable({key: value for key, value in values.items()
++                      if not key.startswith("_")})
++
++
++def _validate_lora_config(config):
++    if not isinstance(config, dict) or config.get("peft_type") != "LORA":
++        raise ValueError("A complete LORA configuration is required.")
++    required = MOE_FIELDS | {"r", "lora_alpha", "lora_dropout", "target_modules"}
++    if not required.issubset(config):
++        raise ValueError("Missing adapter configuration fields: " +
++                         ", ".join(sorted(required - config.keys())))
++    if config.get("bias", "none") != "none" or config.get("modules_to_save"):
++        raise ValueError("This protocol supports lora_* state only; bias/modules_to_save are unsupported.")
++    _canonical(config)  # Also reject non-finite or non-JSON values.
++
++
++def read_checkpoint_metadata(weights_path):
++    """Validate the v02 sidecar and weight hash without importing model code.
++
++    A matching base configuration is an architecture check, not proof that two
++    base-model weight distributions are identical. Keep the recorded reference.
++    """
++    path = Path(weights_path)
++    if path.suffix.lower() != ".safetensors" or not path.is_file():
++        raise ValueError("An existing .safetensors checkpoint file is required.")
++    sidecar = Path(str(path) + ".json")
++    if not sidecar.is_file():
++        raise ValueError("Missing v02 sidecar: " + str(sidecar) +
++                         ". Legacy checkpoints are not inferred or silently loaded.")
++    metadata = json.loads(sidecar.read_text(encoding="utf-8"))
++    if not isinstance(metadata, dict) or metadata.get("format") != FORMAT or metadata.get("version") != VERSION:
++        raise ValueError("Unsupported adapter checkpoint format/version.")
++    if metadata.get("adapter_count") != 1:
++        raise ValueError("Only one adapter is supported by the local MoE expert naming.")
++    name = metadata.get("adapter_name")
++    if not isinstance(name, str) or not name or "." in name:
++        raise ValueError("Invalid single-adapter name.")
++    if metadata.get("weights_file") != path.name:
++        raise ValueError("Checkpoint filename does not match its sidecar.")
++    if metadata.get("weights_sha256") != _sha256(path):
++        raise ValueError("Checkpoint SHA-256 does not match its sidecar.")
++    _validate_lora_config(metadata.get("lora_config"))
++    base_config = metadata.get("base_model_config")
++    if not isinstance(base_config, dict) or not base_config:
++        raise ValueError("Missing base-model architecture configuration.")
++    if metadata.get("base_model_config_sha256") != _config_digest(base_config):
++        raise ValueError("Base-model configuration signature mismatch.")
++    if "base_model_reference" not in metadata or not isinstance(metadata["base_model_reference"], (str, type(None))):
++        raise ValueError("Missing or invalid base-model reference field.")
++    tensors = metadata.get("tensors")
++    if not isinstance(tensors, dict) or not tensors:
++        raise ValueError("Checkpoint contains no declared adapter tensors.")
++    for key, item in tensors.items():
++        if not isinstance(key, str) or "lora_" not in key or not isinstance(item, dict):
++            raise ValueError("Invalid adapter tensor declaration.")
++        shape = item.get("shape")
++        if not isinstance(shape, list) or not all(type(n) is int and n > 0 for n in shape):
++            raise ValueError("Invalid tensor shape: " + key)
++        if not isinstance(item.get("dtype"), str):
++            raise ValueError("Missing tensor dtype: " + key)
++    return metadata
++
++
++def save_adapter_checkpoint(transformer, weights_path, *, adapter_name="default",
++                            save_dtype=None, base_model_reference=None):
++    """Save raw adapter keys plus full configuration; refuse multi-adapter state."""
++    configs = getattr(transformer, "peft_config", {})
++    if set(configs) != {adapter_name}:
++        raise ValueError("Saving requires exactly the requested single adapter.")
++    if not isinstance(adapter_name, str) or not adapter_name or "." in adapter_name:
++        raise ValueError("Invalid adapter name.")
++    lora_config = _jsonable(configs[adapter_name].to_dict())
++    _validate_lora_config(lora_config)
++    state = {}
++    for key, value in transformer.state_dict().items():
++        if "lora_" in key:
++            tensor = value.detach().to(device="cpu", dtype=save_dtype or value.dtype)
++            state[key] = tensor.contiguous()
++    if not state:
++        raise ValueError("Refusing to save an empty adapter checkpoint.")
++    base_config = _base_config(transformer)
++    if not base_config:
++        raise ValueError("Missing base-model architecture configuration.")
++    path = Path(weights_path)
++    sidecar = Path(str(path) + ".json")
++    if path.suffix.lower() != ".safetensors":
++        raise ValueError("Checkpoint filename must end in .safetensors.")
++    if path.exists() or sidecar.exists():
++        raise ValueError("Refusing to overwrite an existing checkpoint or sidecar.")
++    path.parent.mkdir(parents=True, exist_ok=True)
++    from safetensors.torch import save_file
++    with tempfile.TemporaryDirectory(prefix=".adapter-save-", dir=path.parent) as directory:
++        temporary_weights = Path(directory) / path.name
++        save_file(state, str(temporary_weights))
++        metadata = {
++            "format": FORMAT, "version": VERSION, "adapter_count": 1,
++            "adapter_name": adapter_name, "lora_config": lora_config,
++            "base_model_reference": str(base_model_reference) if base_model_reference else None,
++            "base_model_config": base_config,
++            "base_model_config_sha256": _config_digest(base_config),
++            "weights_file": path.name, "weights_sha256": _sha256(temporary_weights),
++            "tensors": {key: {"shape": list(value.shape), "dtype": str(value.dtype)}
++                        for key, value in state.items()},
++        }
++        temporary_json = Path(directory) / sidecar.name
++        temporary_json.write_text(json.dumps(metadata, indent=2, ensure_ascii=False,
++                                             allow_nan=False) + "\n", encoding="utf-8")
++        os.replace(temporary_weights, path)
++        os.replace(temporary_json, sidecar)
++    return metadata
++
++
++def load_adapter_checkpoint(transformer, weights_path):
++    """Restore raw keys with the recorded config; any adapter coverage error fails.
++
++    After an error the caller must discard the model, never fall back to an
++    unadapted pipeline. This routine does not convert legacy checkpoints.
++    """
++    metadata = read_checkpoint_metadata(weights_path)
++    if getattr(transformer, "peft_config", {}):
++        raise ValueError("Load into a clean transformer; multiple adapters are unsupported.")
++    if _config_digest(_base_config(transformer)) != metadata["base_model_config_sha256"]:
++        raise ValueError("Checkpoint and base-model architecture configurations differ.")
++    from safetensors.torch import load_file
++    state = load_file(str(weights_path), device="cpu")
++    declared = metadata["tensors"]
++    if set(state) != set(declared) or not state:
++        raise ValueError("Checkpoint tensor keys do not match the sidecar.")
++    for key, tensor in state.items():
++        if list(tensor.shape) != declared[key]["shape"] or str(tensor.dtype) != declared[key]["dtype"]:
++            raise ValueError("Checkpoint tensor shape/dtype differs from declaration: " + key)
++    from peft import LoraConfig
++    config = LoraConfig(**metadata["lora_config"])
++    name = metadata["adapter_name"]
++    transformer.add_adapter(config, adapter_name=name)
++    expected = {key: value for key, value in transformer.state_dict().items() if "lora_" in key}
++    if set(expected) != set(state):
++        missing = sorted(set(expected) - set(state))
++        unexpected = sorted(set(state) - set(expected))
++        raise ValueError(f"Adapter keys do not match reconstructed configuration: missing={missing}; unexpected={unexpected}")
++    for key, tensor in state.items():
++        if tuple(expected[key].shape) != tuple(tensor.shape):
++            raise ValueError("Adapter shape differs from reconstructed model: " + key)
++    result = transformer.load_state_dict(state, strict=False)
++    missing_adapter = [key for key in result.missing_keys if "lora_" in key]
++    if missing_adapter or result.unexpected_keys:
++        raise ValueError(f"Adapter restore incomplete: missing={missing_adapter}; unexpected={result.unexpected_keys}")
++    transformer.set_adapter(name)
++    transformer.eval()
++    transformer.requires_grad_(False)
++    return {"adapter_name": name, "loaded_tensor_count": len(state),
++            "weights_sha256": metadata["weights_sha256"],
++            "base_model_reference": metadata["base_model_reference"]}
+--- v01/src/DIANet/inference/inference_moe_lora.py
++++ v02/src/DIANet/inference/inference_moe_lora.py
+@@ -16,23 +16,22 @@
+ import os
+ import sys
+ from pathlib import Path
+-from typing import Optional
++CURRENT_DIR = Path(__file__).parent
++SOURCE_ROOT = CURRENT_DIR.parent
++sys.path[:0] = [str(SOURCE_ROOT / "peft" / "src"),
++               str(SOURCE_ROOT / "diffusers" / "src"), str(SOURCE_ROOT)]
+ 
+-import torch
+-from PIL import Image
++from adapter_checkpoint import read_checkpoint_metadata, load_adapter_checkpoint
+ 
+-CURRENT_DIR = Path(__file__).parent
+-DIFFUSERS_PATH = CURRENT_DIR.parent / "diffusers" / "src"
+-sys.path.insert(0, str(DIFFUSERS_PATH))
+-
+-from diffusers import FluxKontextPipeline  # noqa: E402
+-from diffusers.utils import load_image  # noqa: E402
++# Model libraries are imported only after CLI/resource preflight in main().
+ 
+ 
+ def parse_args():
+     parser = argparse.ArgumentParser()
+     parser.add_argument("--model-path", required=True, help="基础模型路径")
+-    parser.add_argument("--lora-path", default=None, help="LoRA/MoE-LoRA 权重（.safetensors）")
++    adapter = parser.add_mutually_exclusive_group(required=True)
++    adapter.add_argument("--lora-path", help="v02 .safetensors 权重（必须有同名 .safetensors.json）")
++    adapter.add_argument("--base-model-only", action="store_true", help="显式使用未适配基础模型；不是 DIA-Net 推理")
+     parser.add_argument("--prompt", required=True, help="提示词")
+     parser.add_argument("--image", required=True, help="控制图路径")
+     parser.add_argument("--output", default="./outputs/sample.png", help="输出路径")
+@@ -45,7 +44,8 @@
+     return parser.parse_args()
+ 
+ 
+-def str_to_dtype(name: str) -> torch.dtype:
++def str_to_dtype(name: str):
++    import torch
+     if name == "bfloat16":
+         return torch.bfloat16
+     if name == "float32":
+@@ -55,28 +55,38 @@
+ 
+ def main():
+     args = parse_args()
++    if args.lora_path:
++        # Fail before loading the base model, including for legacy/absent files.
++        read_checkpoint_metadata(args.lora_path)
++    if not Path(args.model_path).is_dir():
++        raise ValueError("--model-path must be an existing local directory.")
++    if not Path(args.image).is_file():
++        raise ValueError("--image must be an existing local file.")
++    if Path(args.output).exists():
++        raise ValueError("Refusing to overwrite an existing output image.")
++    import torch
++    from diffusers import FluxKontextPipeline
++    from diffusers.utils import load_image
+     dtype = str_to_dtype(args.dtype)
+ 
+     print("[加载] 模型与管线")
+-    pipe = FluxKontextPipeline.from_pretrained(args.model_path, torch_dtype=dtype)
++    pipe = FluxKontextPipeline.from_pretrained(args.model_path, torch_dtype=dtype,
++                                               local_files_only=True)
+ 
+-    if args.lora_path and os.path.exists(args.lora_path):
++    if args.lora_path:
+         print(f"[加载] 应用 LoRA: {args.lora_path}")
+-        pipe.load_lora_weights(args.lora_path)
++        restored = load_adapter_checkpoint(pipe.transformer, args.lora_path)
++        print(f"[加载] 已恢复 {restored['loaded_tensor_count']} 个适配器张量")
++    else:
++        print("[模型] 显式使用未适配基础模型；不是 DIA-Net 推理")
+ 
+-    # 混合 Offload 策略（2025）：优先顺序 offload，其次整模型 offload
++    # Offload failures stop execution; do not continue with an unknown device state.
+     if args.offload == "sequential":
+-        try:
+-            pipe.enable_sequential_cpu_offload()
+-            print("[Offload] 已启用 sequential cpu offload")
+-        except Exception as e:
+-            print(f"[Offload] sequential 失败：{e}")
++        pipe.enable_sequential_cpu_offload()
++        print("[Offload] 已启用 sequential cpu offload")
+     elif args.offload == "model":
+-        try:
+-            pipe.enable_model_cpu_offload()
+-            print("[Offload] 已启用 model cpu offload")
+-        except Exception as e:
+-            print(f"[Offload] model offload 失败：{e}")
++        pipe.enable_model_cpu_offload()
++        print("[Offload] 已启用 model cpu offload")
+ 
+     image = load_image(args.image).convert("RGB").resize((args.width, args.height))
+ 
+--- v01/src/DIANet/LLE/infer_dual_route.py
++++ v02/src/DIANet/LLE/infer_dual_route.py
+@@ -176,11 +176,11 @@
+         (transformer, vae, text_encoder_1, text_encoder_2,
+          tokenizer_1, tokenizer_2, scheduler) = loader.load_all()
+     else:
+-        # TODO: 实现真实FLUX加载
+-        print("⚠ 真实FLUX模型加载尚未实现，使用Mock版本")
+-        loader = MockFluxModelLoader(device=args.device)
+-        (transformer, vae, text_encoder_1, text_encoder_2,
+-         tokenizer_1, tokenizer_2, scheduler) = loader.load_all()
++        raise RuntimeError(
++            "This archived dual-routing entry point is not connected to real FLUX. "
++            "Use --use-mock only for the explicitly labelled prototype. "
++            "No model is substituted automatically."
++        )
+ 
+     # 2. 创建推理管道
+     print("\n" + "=" * 70)
+--- v01/src/DIANet/train/core/optimizer.py
++++ v02/src/DIANet/train/core/optimizer.py
+@@ -24,9 +24,12 @@
+                 eps=config.adam_epsilon,
+                 weight_decay=config.adam_weight_decay,
+             )
+-        except ImportError:
+-            print("[警告] bitsandbytes 未安装，使用标准 AdamW")
+-            optimizer = torch.optim.AdamW(params, lr=config.learning_rate)
++        except ImportError as exc:
++            raise RuntimeError(
++                "AdamW8bit was requested but bitsandbytes is unavailable. "
++                "Resolve the runtime dependency, or explicitly select adamw in "
++                "a new configuration; the optimizer is not substituted automatically."
++            ) from exc
+     else:
+         raise ValueError(f"不支持的优化器：{opt_type}")
+     
+--- v01/src/DIANet/train/core/saver.py
++++ v02/src/DIANet/train/core/saver.py
+@@ -2,6 +2,8 @@
+ """模型保存模块"""
+ import os
+ import torch
++
++from adapter_checkpoint import save_adapter_checkpoint
+ 
+ class ModelSaver:
+     """模型保存器"""
+@@ -43,16 +45,13 @@
+         
+         save_dtype = self._resolve_save_dtype()
+ 
+-        # 直接从 state_dict 过滤包含 lora_ 的权重（覆盖 MoE 专家、路由等全部可训练 LoRA 权重）
+-        converted_state_dict = {}
+-        for k, v in transformer.state_dict().items():
+-            if "lora_" in k:
+-                converted_state_dict[k] = v.detach().to("cpu", dtype=save_dtype)
+-        
+-        # 保存
+-        from safetensors.torch import save_file
+-        save_file(converted_state_dict, save_path)
++        # v02 工程协议：raw LoRA/专家/路由键 + 完整配置 JSON，禁止猜测旧格式。
++        save_adapter_checkpoint(
++            transformer, save_path, save_dtype=save_dtype,
++            base_model_reference=self.config.model_path,
++        )
+         
+         file_size_mb = os.path.getsize(save_path) / (1024 * 1024)
+         self._log(f"[保存] ✓ LoRA 权重已保存：{save_path}")
++        self._log(f"[保存] 必需配置和校验文件：{save_path}.json")
+         self._log(f"[保存] 文件大小：{file_size_mb:.2f} MB")
+--- v01/src/DIANet/train/core/trainer.py
++++ v02/src/DIANet/train/core/trainer.py
+@@ -7,6 +7,7 @@
+ #   - 这些导入在文件级别初始化，不涉及业务逻辑
+ # ============================================================================
+ import os                                        # 路径处理
++import tempfile
+ from contextlib import nullcontext               # 统一 with 接口，占位用
+ 
+ import torch                                     # 核心张量/自动求导库
+@@ -16,12 +17,7 @@
+ from tqdm import tqdm                            # 进度条
+ from PIL import Image                            # 保存/处理采样图片
+ from diffusers.hooks import apply_group_offloading  # 混合 offload（block/leaf level）
+-from safetensors.torch import save_file             # 临时保存 LoRA
+-from peft import LoraConfig                        # 构造验证用 LoRA 配置
+-from peft.utils import (
+-    get_peft_model_state_dict,                     # 导出 LoRA/MoE 权重（含路由器）
+-    set_peft_model_state_dict,                     # 安全加载 LoRA 权重
+-)                                                  
++from adapter_checkpoint import save_adapter_checkpoint, load_adapter_checkpoint
+ 
+ # ============================================================================
+ # 第二部分：Trainer 类定义与初始化
+@@ -604,7 +600,10 @@
+ 
+         # 为避免影响训练态，这里单独实例化一条推理管线，应用与 inference_lora.py 相同的混合 offload：
+         # Transformer block_level；CLIP/T5 block_level；VAE leaf_level。
+-        tmp_lora_path = os.path.join(self.config.validation_save_dir, f"_tmp_lora_epoch_{epoch_idx}.safetensors")
++        temporary_checkpoint = tempfile.TemporaryDirectory(
++            prefix=f"_tmp_lora_epoch_{epoch_idx}_", dir=self.config.validation_save_dir,
++        )
++        tmp_lora_path = os.path.join(temporary_checkpoint.name, "adapter.safetensors")
+         target_dtype = torch.float16
+ 
+         # 记录训练状态，采样后恢复
+@@ -623,10 +622,11 @@
+         }
+ 
+         try:
+-            # 导出当前 LoRA/MoE 权重到临时文件（fp16），使用 peft 提供的 state_dict，确保路由器/专家权重完整
+-            converted = get_peft_model_state_dict(transformer, adapter_name="default")
+-            converted = {k: v.detach().to("cpu", dtype=target_dtype) for k, v in converted.items()}
+-            save_file(converted, tmp_lora_path)
++            # 与正式保存/推理共用 v02 raw-key + JSON 协议，不重新猜测 MoE 配置。
++            save_adapter_checkpoint(
++                transformer, tmp_lora_path, save_dtype=target_dtype,
++                base_model_reference=self.config.model_path,
++            )
+ 
+             # 暂时将训练态的核心模块搬到 CPU，释放 GPU 显存
+             transformer.to("cpu")
+@@ -644,60 +644,12 @@
+             pipeline_off = FluxKontextPipeline.from_pretrained(
+                 self.config.model_path,
+                 torch_dtype=target_dtype,
+-            )
+-
+-            # 构造与训练一致的 LoRA/MoE 配置，先挂适配器再塞权重
+-            module_modes = self.config.lora_module_modes or {}
+-            variant_cfg = self.config.lora_variant_config or {}
+-            auto_variant = "moe" if any(m == "moe" for m in module_modes.values()) else "standard"
+-            variant = self.config.lora_variant or "auto"
+-            if variant == "auto":
+-                variant = auto_variant
+-
+-            adapter_name = "default"  # 与训练阶段保持一致的适配器名，避免权重前缀不匹配
+-
+-            num_experts = variant_cfg.get("num_experts", 6)
+-            expert_rank = variant_cfg.get("expert_rank", 32)
+-            expert_alpha = variant_cfg.get("expert_alpha", 32)
+-            top_k = variant_cfg.get("top_k", 1)
+-            blc_alpha = variant_cfg.get("blc_alpha", 0.0)
+-            blc_weight = variant_cfg.get("blc_weight", 0.0)
+-
+-            # 与训练时默认一致的 target_modules
+-            if variant == "moe":
+-                target_modules = [
+-                    "attn.to_k",
+-                    "attn.to_q",
+-                    "attn.to_v",
+-                    "attn.to_out.0",
+-                    "ff.net.0.proj",
+-                    "ff.net.2",
+-                    "proj_out",
+-                ]
+-            else:
+-                target_modules = [
+-                    "attn.to_k",
+-                    "attn.to_q",
+-                    "attn.to_v",
+-                    "attn.to_out.0",
+-                ]
+-
+-            lora_config = LoraConfig(
+-                r=self.config.lora_rank,
+-                lora_alpha=self.config.lora_alpha,
+-                lora_dropout=self.config.lora_dropout,
+-                init_lora_weights="gaussian",
+-                target_modules=target_modules,
+-                module_modes=module_modes,
+-                num_experts=num_experts,
+-                expert_rank=expert_rank,
+-                expert_alpha=expert_alpha,
+-                top_k=top_k,
+-                blc_alpha=blc_alpha,
+-                blc_weight=blc_weight,
+-            )
+-
+-            pipeline_off.transformer.add_adapter(lora_config, adapter_name=adapter_name)
++                local_files_only=True,
++            )
++
++            # 加载发生在 offload 前；键/shape/配置不匹配立即失败，不融合动态专家。
++            restored = load_adapter_checkpoint(pipeline_off.transformer, tmp_lora_path)
++            self.logger.info(f"[验证] 已恢复 {restored['loaded_tensor_count']} 个适配器张量")
+ 
+             onload_device = torch.device(self.device)
+             offload_device = torch.device("cpu")
+@@ -739,20 +691,6 @@
+                 use_stream=True,
+             )
+ 
+-            # 加载临时 LoRA：直接用 load_state_dict 覆盖 lora_* 参数
+-            # 使用 peft 的加载逻辑，确保 MoE / adapter 名匹配
+-            set_peft_model_state_dict(
+-                pipeline_off.transformer,
+-                converted,
+-                adapter_name=adapter_name,
+-                ignore_mismatched_sizes=False,
+-                low_cpu_mem_usage=False,
+-            )
+-            # MoE-LoRA 需要动态路由，不能 fuse；标准 LoRA 可选择 fuse 以节省开销
+-            if variant == "moe":
+-                pipeline_off.transformer.set_adapter(adapter_name)
+-            else:
+-                pipeline_off.fuse_lora(adapter_names=[adapter_name])
+             pipeline_off.set_progress_bar_config(disable=True)
+ 
+             # 控制图
+@@ -780,12 +718,10 @@
+                     self.logger.info(f"[验证] Epoch {epoch_idx} 样本已保存：{save_path}")
+         except Exception as e:
+             self.logger.error(f"[验证] 采样失败：{e}")
++            raise
+         finally:
+-            # 清理临时 LoRA 与管线，释放显存
+-            try:
+-                os.remove(tmp_lora_path)
+-            except Exception:
+-                pass
++            # 临时目录仅属于本次验证；同时清理权重与必需 JSON sidecar。
++            temporary_checkpoint.cleanup()
+             try:
+                 del pipeline_off
+             except Exception:
+--- v01/src/DIANet/train/train_lora.py
++++ v02/src/DIANet/train/train_lora.py
+@@ -20,9 +20,10 @@
+ from pathlib import Path
+ 
+ # 添加本地库路径
+-CURRENT_DIR = Path(__file__).parent.parent
+-sys.path.insert(0, str(CURRENT_DIR / "diffusers" / "src"))
+-sys.path.insert(0, str(CURRENT_DIR / "peft" / "src"))
++CURRENT_DIR = Path(__file__).resolve().parent.parent
++sys.path[:0] = [str(CURRENT_DIR / "peft" / "src"),
++               str(CURRENT_DIR / "diffusers" / "src"),
++               str(CURRENT_DIR / "train"), str(CURRENT_DIR)]
+ 
+ import torch
+ 
+--- v01/tools/review.py
++++ v02/tools/review.py
+@@ -6,6 +6,7 @@
+ """
+ import argparse
+ import ast
++import importlib.util
+ import json
+ import os
+ from pathlib import Path
+@@ -16,12 +17,23 @@
+ DEFAULT_ROOT = Path(__file__).resolve().parent.parent / "src" / "DIANet"
+ ENTRY = {"train": "train/train_lora.py", "infer": "inference/inference_moe_lora.py"}
+ REQUIRED = [
+-    *ENTRY.values(), "train/core/config.py", "train/core/trainer.py",
++    *ENTRY.values(), "adapter_checkpoint.py", "train/core/config.py", "train/core/trainer.py",
+     "peft/src/peft/tuners/lora/config.py", "peft/src/peft/tuners/lora/layer.py",
+     "peft/src/peft/tuners/lora/model.py", "peft/src/peft/utils/save_and_load.py",
+     "diffusers/src/diffusers/pipelines/flux/pipeline_flux_kontext.py",
+     "peft/LICENSE", "diffusers/LICENSE",
+ ]
++
++
++def validate_adapter(path, root):
++    """Read the v0.2 checkpoint contract without importing model libraries."""
++    module_path = root / "adapter_checkpoint.py"
++    spec = importlib.util.spec_from_file_location("dia_checkpoint_inspection", module_path)
++    if spec is None or spec.loader is None:
++        raise ValueError("Checkpoint metadata inspector is unavailable.")
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module.read_checkpoint_metadata(path)
+ PATH_FIELDS = [
+     ("model", "name_or_path"), ("dataset", "input_image_dir"),
+     ("dataset", "target_image_dir"), ("save", "output_dir"),
+@@ -170,11 +182,15 @@
+             issues.append("Choose either --lora-path or --base-model-only.")
+         if args.lora_path:
+             adapter = local_path(args.lora_path, Path.cwd())
+-            if not adapter.exists():
+-                issues.append("Requested LoRA path does not exist; base-model fallback is disabled.")
++            try:
++                validate_adapter(adapter, root)
++            except (ValueError, OSError, RuntimeError) as exc:
++                issues.append("Adapter preflight failed: " + str(exc))
+             arguments.extend(["--lora-path", str(adapter)])
+         elif not args.base_model_only:
+             issues.append("Supply --lora-path, or explicitly select --base-model-only.")
++        if args.base_model_only:
++            arguments.append("--base-model-only")
+         details = {"inference_kind": "base model only" if args.base_model_only else "retained adapter path"}
+     plan = {"mode": args.mode, "execute_requested": args.execute,
+             "entrypoint": str(root / ENTRY[args.mode]), "arguments": arguments,

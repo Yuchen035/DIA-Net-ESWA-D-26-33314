@@ -1,0 +1,55 @@
+--- supplied/peft/src/peft/tuners/lora/config.py
++++ src/DIANet/peft/src/peft/tuners/lora/config.py
+@@ -1,3 +1,10 @@
++# Local modification notice (added for review packaging, 2026-10-12):
++# This supplied file differs from upstream PEFT commit
++# b10527e82c2171568f538f5b822817e8a753672a. The archived modifications
++# predate this packaging operation; see docs/THIRD_PARTY_NOTICES.md
++# and provenance/peft_local_changes.patch in the reviewer package.
++# Original upstream copyright and license notices are retained below.
++
+ # Copyright 2023-present the HuggingFace Inc. team.
+ #
+ # Licensed under the Apache License, Version 2.0 (the "License");
+
+--- supplied/peft/src/peft/tuners/lora/layer.py
++++ src/DIANet/peft/src/peft/tuners/lora/layer.py
+@@ -1,3 +1,10 @@
++# Local modification notice (added for review packaging, 2026-10-12):
++# This supplied file differs from upstream PEFT commit
++# b10527e82c2171568f538f5b822817e8a753672a. The archived modifications
++# predate this packaging operation; see docs/THIRD_PARTY_NOTICES.md
++# and provenance/peft_local_changes.patch in the reviewer package.
++# Original upstream copyright and license notices are retained below.
++
+ # Copyright 2023-present the HuggingFace Inc. team.
+ #
+ # Licensed under the Apache License, Version 2.0 (the "License");
+
+--- supplied/peft/src/peft/tuners/lora/model.py
++++ src/DIANet/peft/src/peft/tuners/lora/model.py
+@@ -1,3 +1,10 @@
++# Local modification notice (added for review packaging, 2026-10-12):
++# This supplied file differs from upstream PEFT commit
++# b10527e82c2171568f538f5b822817e8a753672a. The archived modifications
++# predate this packaging operation; see docs/THIRD_PARTY_NOTICES.md
++# and provenance/peft_local_changes.patch in the reviewer package.
++# Original upstream copyright and license notices are retained below.
++
+ # Copyright 2023-present the HuggingFace Inc. team.
+ #
+ # Licensed under the Apache License, Version 2.0 (the "License");
+
+--- supplied/peft/src/peft/utils/save_and_load.py
++++ src/DIANet/peft/src/peft/utils/save_and_load.py
+@@ -1,3 +1,10 @@
++# Local modification notice (added for review packaging, 2026-10-12):
++# This supplied file differs from upstream PEFT commit
++# b10527e82c2171568f538f5b822817e8a753672a. The archived modifications
++# predate this packaging operation; see docs/THIRD_PARTY_NOTICES.md
++# and provenance/peft_local_changes.patch in the reviewer package.
++# Original upstream copyright and license notices are retained below.
++
+ # Copyright 2023-present the HuggingFace Inc. team.
+ #
+ # Licensed under the Apache License, Version 2.0 (the "License");

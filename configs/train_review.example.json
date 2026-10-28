@@ -1,0 +1,108 @@
+{
+  "job_name": "flux_kontext_lora_training",
+  "device": "cuda",
+  "gpu_id": 0,
+  "seed": 42,
+  "model": {
+    "name_or_path": "../assets/REPLACE_ME_FLUX_KONTEXT",
+    "dtype": "bfloat16",
+    "quantize": true,
+    "quantize_te": false,
+    "qtype": "int8"
+  },
+  "lora": {
+    "rank": 16,
+    "alpha": 16,
+    "dropout": 0.0,
+    "module_modes": {
+      "transformer_blocks.*.attn.to_q": "lora",
+      "transformer_blocks.*.attn.to_k": "lora",
+      "transformer_blocks.*.attn.to_v": "lora",
+      "transformer_blocks.*.attn.to_out.0": "lora",
+      "transformer_blocks.*.ff.net.0.proj": "lora",
+      "transformer_blocks.*.ff.net.2": "lora",
+      "transformer_blocks.*.proj_out": "lora",
+      "single_transformer_blocks.*.attn.to_q": "moe",
+      "single_transformer_blocks.*.attn.to_k": "moe",
+      "single_transformer_blocks.*.attn.to_v": "moe",
+      "single_transformer_blocks.*.attn.to_out.0": "moe",
+      "single_transformer_blocks.*.ff.net.0.proj": "moe",
+      "single_transformer_blocks.*.ff.net.2": "moe",
+      "single_transformer_blocks.*.proj_out": "moe"
+    },
+    "variant": "auto",
+    "variant_config": {
+      "num_experts": 4,
+      "expert_rank": 32,
+      "expert_alpha": 32,
+      "top_k": 2,
+      "blc_alpha": 0.0,
+      "blc_weight": 0.0
+    }
+  },
+  "dataset": {
+    "input_image_dir": "../data/REPLACE_ME_INPUT",
+    "target_image_dir": "../data/REPLACE_ME_TARGET",
+    "prompt": "Please convert the low-light image to a perfectly exposed photograph with bright, natural lighting and clear details.",
+    "use_prompt_file": false,
+    "prompt_ext": "txt",
+    "resolution": 512,
+    "center_crop": false,
+    "random_flip": false,
+    "num_workers": 0,
+    "pin_memory": true
+  },
+  "train": {
+    "num_epochs": 100,
+    "batch_size": 1,
+    "gradient_accumulation_steps": 1,
+    "learning_rate": 0.0001,
+    "lr_scheduler": "constant",
+    "lr_warmup_steps": 0,
+    "optimizer": "adamw8bit",
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_epsilon": 1e-08,
+    "adam_weight_decay": 0.01,
+    "max_grad_norm": 1.0,
+    "gradient_checkpointing": true,
+    "mixed_precision": "fp16",
+    "max_sequence_length": 512
+  },
+  "memory_optimization": {
+    "vae_offload": true,
+    "cache_latents": true,
+    "cache_to_disk": false,
+    "cache_dir": "../runs/REPLACE_ME_RUN/cache",
+    "te_offload": true
+  },
+  "save": {
+    "output_dir": "../runs/REPLACE_ME_RUN",
+    "save_every_n_epochs": 5,
+    "save_total_limit": 3,
+    "save_dtype": "float16"
+  },
+  "logging": {
+    "log_level": "INFO",
+    "log_every_n_steps": 10,
+    "use_tensorboard": false,
+    "tensorboard_dir": "../runs/REPLACE_ME_RUN/logs"
+  },
+  "validation": {
+    "enabled": true,
+    "every_n_epochs": 1,
+    "save_dir": "../runs/REPLACE_ME_RUN/validation",
+    "seed": 42,
+    "width": 512,
+    "height": 512,
+    "external_infer": false,
+    "offload_mode": "sequential",
+    "infer_dtype": "float16",
+    "validation_prompts": [
+      "Please convert the low-light image to a perfectly exposed photograph with bright, natural lighting and clear details."
+    ],
+    "validation_image": "../data/REPLACE_ME_VALIDATION.png",
+    "num_inference_steps": 28,
+    "guidance_scale": 2.5
+  }
+}

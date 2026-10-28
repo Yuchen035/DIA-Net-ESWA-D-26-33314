@@ -1,0 +1,72 @@
+{
+  "document_type": "manuscript_settings_reference_only",
+  "executable": false,
+  "warning": "Transcribed from supplied manuscript source, not verified experiment configuration. Do not pass this file to a training entry point.",
+  "source": "ESWA_DIA_NET.zip/cas-sc-sample.tex, Datasets and Implementation Details and Table tab:hyperparams",
+  "semantic_categories": [
+    "indoor low-light",
+    "outdoor low-light",
+    "indoor backlit",
+    "outdoor backlit"
+  ],
+  "semantic_perceiver": {
+    "model": "Qwen3-VL-4B-Instruct",
+    "image_resolution": [
+      512,
+      512
+    ],
+    "max_sequence_length": 512,
+    "train_validation_ratio": [
+      8,
+      2
+    ],
+    "optimizer": "Adam",
+    "learning_rate": 0.0002,
+    "batch_size": 16,
+    "weight_decay": 0.01,
+    "warmup_ratio": 0.03,
+    "epochs": 3,
+    "checkpoint_selection": "validation classification accuracy"
+  },
+  "enhancement": {
+    "base_model_description_in_manuscript": "Flux DiT; exact original local model snapshot not established",
+    "lora_rank": 16,
+    "semantic_specific_experts": 4,
+    "shared_experts": 4,
+    "shared_top_k": 2,
+    "lambda_adversarial": 0.1,
+    "lambda_reconstruction": 1.0,
+    "lambda_color": 0.5,
+    "crop_resolution": [
+      512,
+      512
+    ],
+    "augmentation": [
+      "random horizontal flip",
+      "random 90/180/270 degree rotations"
+    ],
+    "optimizer": "Adam",
+    "generator_learning_rate": 0.0001,
+    "discriminator_learning_rate": 0.0002,
+    "batch_size": 8,
+    "iterations": 80000,
+    "learning_rate_decay_factor": 0.8,
+    "decay_every_iterations": 10000,
+    "gradient_clip": 1.0,
+    "inference_steps": 4
+  },
+  "sample_counts_as_reported_not_verified_split_membership": {
+    "train": {
+      "LOLv2_real": 600,
+      "LOLv2_synthetic": 200,
+      "BAID": 600
+    },
+    "test": {
+      "LOLv2_real": 100,
+      "LOLv2_synthetic": 100,
+      "BAID": 300
+    }
+  },
+  "reported_hardware": "2 x NVIDIA RTX 3090; no benchmark performed in this packaging task",
+  "status": "These reported settings differ from the retained engineering configuration. See docs/PAPER_CODE_MAP.md."
+}

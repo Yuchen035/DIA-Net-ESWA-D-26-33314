@@ -1,0 +1,30 @@
+{
+  "package_version": "0.2.0",
+  "inputs": [
+    {
+      "filename": "第二篇工作.zip",
+      "size_bytes": 346976076,
+      "sha256": "22e1f2a6bccf1aec02503408a8eb98eb6ecea619f9e8c6f7fc28aaeb574b3f67",
+      "role": "original project source"
+    },
+    {
+      "filename": "ESWA_DIA_Net_Source_Review_v01.zip",
+      "size_bytes": 5582389,
+      "sha256": "d94e03c6d3e8936cbf307ef2de679ee1e9a28999a7222380d7acc1fbb5e58a37",
+      "role": "v0.1 packaging parent"
+    },
+    {
+      "filename": "ESWA_DIA_NET.zip",
+      "size_bytes": 48495694,
+      "sha256": "e6b2bfc98a80d2b8cfb72f779c642b2ef45a57337eb44f4247190e2c6d5d6df6",
+      "role": "article TeX reference; sample PDFs are templates"
+    },
+    {
+      "filename": "cas-sc-sample(3).pdf",
+      "size_bytes": 47700732,
+      "sha256": "5efb0c8646979e49e1a9e5063a35fe3d7c74aa3c4b28bb4b96ca556d734271c2",
+      "role": "author-identified submitted manuscript; authoritative paper reference"
+    }
+  ],
+  "qualification": "All four input files are preserved. No supplementary manuscript implementation was supplied. The separate Notes_and_Response text was not provided. No other project archive is claimed as an independently checked input."
+}

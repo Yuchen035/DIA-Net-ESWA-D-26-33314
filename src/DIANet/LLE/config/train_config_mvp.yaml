@@ -1,0 +1,47 @@
+# ==============================================================================
+# MVP配置文件 - 基础标准LoRA训练
+# ==============================================================================
+
+# 基础配置
+job_name: "lora_mvp_training"
+device: "cuda"
+seed: 42
+
+# 模型配置
+model:
+  base_model: "black-forest-labs/FLUX.1-dev"
+  dtype: "bfloat16"
+
+# LoRA配置
+lora:
+  rank: 16
+  alpha: 16.0
+  dropout: 0.0
+  target_modules:
+    - "single_transformer_blocks.*.attn.to_q"
+    - "single_transformer_blocks.*.attn.to_k"
+    - "single_transformer_blocks.*.attn.to_v"
+    - "single_transformer_blocks.*.attn.to_out.0"
+
+# 数据配置
+data:
+  input_image_dir: "./data/low_light/input"
+  target_image_dir: "./data/low_light/target"
+  prompt: "enhance the low-light image to well-exposed with natural lighting"
+  resolution: 512
+  batch_size: 1
+  num_workers: 4
+
+# 训练配置
+train:
+  num_epochs: 100
+  learning_rate: 1.0e-4
+  lr_scheduler: "constant"
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+
+# 保存配置
+save:
+  output_dir: "./outputs/lora_mvp"
+  save_every_n_epochs: 10
+  save_dtype: "float16"

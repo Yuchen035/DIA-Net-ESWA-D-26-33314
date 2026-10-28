@@ -1,0 +1,59 @@
+# LoRA训练配置文件
+# 用于MoE-LoRA暗光增强训练
+
+# 模型配置
+model:
+  base_model: "black-forest-labs/FLUX.1-dev"  # 基础模型
+  dtype: "bfloat16"  # 数据类型: bfloat16, float16, float32
+  low_cpu_mem_usage: true  # 使用低CPU内存模式
+
+# 数据配置
+data:
+  input_image_dir: "./data/input"  # 输入图像目录（暗光图像）
+  target_image_dir: "./data/target"  # 目标图像目录（增强后图像）
+  prompt: "enhance the low-light image, improve brightness and details"  # 训练提示词
+  resolution: 512  # 图像分辨率
+  center_crop: true  # 是否中心裁剪
+  random_flip: true  # 是否随机翻转
+  num_workers: 4  # 数据加载线程数
+
+# LoRA配置
+lora:
+  # 目标模块 - 注入LoRA的层
+  # FLUX Transformer结构参考:
+  # - single_transformer_blocks: 单流transformer块
+  # - transformer_blocks: 双流transformer块
+  target_modules:
+    - "single_transformer_blocks.*.attn.to_q"
+    - "single_transformer_blocks.*.attn.to_k"
+    - "single_transformer_blocks.*.attn.to_v"
+    - "single_transformer_blocks.*.proj_out"
+    - "transformer_blocks.*.attn.to_q"
+    - "transformer_blocks.*.attn.to_k"
+    - "transformer_blocks.*.attn.to_v"
+    - "transformer_blocks.*.proj_out"
+
+  rank: 16  # LoRA秩（越大参数越多，表达能力越强）
+  alpha: 16.0  # LoRA缩放因子（通常设置为rank的值）
+  dropout: 0.0  # LoRA dropout概率
+  init_method: "kaiming"  # 初始化方法: kaiming, normal, zero
+
+# 训练配置
+train:
+  num_epochs: 50  # 训练轮数
+  batch_size: 1  # 批次大小（根据显存调整）
+  learning_rate: 1.0e-4  # 学习率
+  gradient_accumulation_steps: 4  # 梯度累积步数
+  max_grad_norm: 1.0  # 梯度裁剪阈值
+  max_sequence_length: 512  # T5最大序列长度
+  save_every_n_epochs: 10  # 每N个epoch保存一次
+  cfg_scale: 3.5  # Classifier-free guidance scale
+
+# 保存配置
+save:
+  output_dir: "./outputs"  # 输出目录
+  save_dtype: "float16"  # 保存精度: float16, bfloat16, float32
+  save_total_limit: 3  # 最多保留N个检查点（null表示不限制）
+
+# 设备配置
+device: "cuda"  # 设备: cuda, cpu

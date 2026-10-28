@@ -1,0 +1,191 @@
+# ==============================================================================
+# FLUX Kontext LoRA 训练配置文件
+# ==============================================================================
+
+# ============================================================================
+# 基础配置
+# ============================================================================
+job_name: "flux_kontext_lora_training"
+device: "cuda"              # 训练设备：cuda 或 cpu
+gpu_id: 0                   # GPU 设备 ID（如果有多张显卡）
+seed: 42                    # 随机种子，用于结果复现
+
+# ============================================================================
+# 模型配置
+# ============================================================================
+model:
+  # 模型路径（本地路径或 HuggingFace repo ID）
+  name_or_path: "../FLUX.1-Kontext-dev"
+  
+  # 模型精度
+  dtype: "bfloat16"         # 模型精度：bfloat16, float16, float32
+  
+  # 显存优化：量化（Quantization）
+  quantize: True         # 是否量化 Transformer（推荐在 24GB 显卡上启用）
+  quantize_te: false         # 是否量化 T5 Text Encoder（可选）
+  qtype: "int8"             # 量化类型：int8 或 fp8
+
+# ============================================================================
+# LoRA 配置
+# ============================================================================
+lora:
+  # LoRA 基础参数
+  rank: 16                  # LoRA 秩（rank）：4, 8, 16, 32, 64
+  alpha: 16                 # LoRA alpha（通常等于 rank）
+  dropout: 0.0              # LoRA dropout（0 表示不使用）
+  
+  # 精准控制：为每个模块指定模式（可选，支持通配符）
+  # 支持的模式：
+  #   - moe    ：使用 MoE-LoRA
+  #   - lora   ：使用标准 LoRA
+  #   - freeze ：不插入适配器，保持冻结
+  # 规则：仅依赖此表决定模式；未匹配到的模块使用默认策略（attn 用 LoRA，ff/proj_out 用 MoE）
+  module_modes:
+    # 双流 DIT（transformer_blocks.*）使用标准 LoRA
+    "transformer_blocks.*.attn.to_q": "lora"
+    "transformer_blocks.*.attn.to_k": "lora"
+    "transformer_blocks.*.attn.to_v": "lora"
+    "transformer_blocks.*.attn.to_out.0": "lora"
+    "transformer_blocks.*.ff.net.0.proj": "lora"
+    "transformer_blocks.*.ff.net.2": "lora"
+    "transformer_blocks.*.proj_out": "lora"
+
+    # 单流 DIT（single_transformer_blocks.*）使用 MoE-LoRA
+    "single_transformer_blocks.*.attn.to_q": "moe"
+    "single_transformer_blocks.*.attn.to_k": "moe"
+    "single_transformer_blocks.*.attn.to_v": "moe"
+    "single_transformer_blocks.*.attn.to_out.0": "moe"
+    "single_transformer_blocks.*.ff.net.0.proj": "moe"
+    "single_transformer_blocks.*.ff.net.2": "moe"
+    "single_transformer_blocks.*.proj_out": "moe"
+
+  # LoRA 变体（支持 MoE-LoRA）
+  variant: "auto"           # auto: 按 module_modes 推断（含 moe 则走 MoE，否则标准）
+  variant_config:
+    num_experts: 4          # MoE 专家数量
+    expert_rank: 32         # 每个专家的 rank
+    expert_alpha: 32        # 每个专家的 alpha
+    top_k: 2                # 激活专家数
+    blc_alpha: 0.0          # 负载均衡系数（如需）
+    blc_weight: 0.0         # 负载均衡 loss 权重（如需）
+
+# ============================================================================
+# 数据集配置
+# ============================================================================
+dataset:
+  # 数据路径
+  input_image_dir: "__LOCAL_PROJECT_ROOT__/datasets/test/input"    # 输入图像文件夹
+  target_image_dir: "__LOCAL_PROJECT_ROOT__/datasets/test/output"  # 目标图像文件夹
+  
+  # 文本提示词
+  prompt: "Please convert the low-light image to a perfectly exposed photograph with bright, natural lighting and clear details."
+  
+  # 或者使用提示词文件（每个图像对应一个 .txt 文件）
+  use_prompt_file: false    # 是否使用 .txt 文件作为提示词
+  prompt_ext: "txt"         # 提示词文件扩展名
+  
+  # 图像处理
+  resolution: 512          # 训练分辨率
+  center_crop: false        # 是否中心裁剪
+  random_flip: false        # 是否随机水平翻转
+  
+  # 数据加载
+  num_workers: 0            # DataLoader 工作进程数（0 表示主进程加载）
+  pin_memory: true          # 是否使用固定内存（加速 GPU 传输）
+
+# ============================================================================
+# 训练配置
+# ============================================================================
+train:
+  # 训练步数
+  num_epochs: 100            # 训练轮数
+  batch_size: 1             # 批次大小
+  gradient_accumulation_steps: 1  # 梯度累积步数（等效 batch = batch_size × 此值）
+  
+  # 学习率
+  learning_rate: 1.0e-4     # 学习率
+  lr_scheduler: "constant"  # 学习率调度器：constant, cosine, constant_with_warmup
+  lr_warmup_steps: 0        # 预热步数（用于 constant_with_warmup）
+  
+  # 优化器
+  optimizer: "adamw8bit"        # 优化器类型：adamw, adamw8bit, prodigy
+  adam_beta1: 0.9           # Adam beta1
+  adam_beta2: 0.999         # Adam beta2
+  adam_epsilon: 1.0e-8      # Adam epsilon
+  adam_weight_decay: 0.01   # 权重衰减
+  max_grad_norm: 1.0        # 梯度裁剪阈值
+  
+  # 显存优化：Gradient Checkpointing
+  gradient_checkpointing: True  # 是否启用梯度检查点（24GB 显卡建议启用）
+  
+  # 显存优化：Mixed Precision Training
+  mixed_precision: "fp16"     # 混合精度训练：no, fp16, bf16
+  
+  # 文本编码器设置
+  max_sequence_length: 512  # T5 最大序列长度
+
+# ============================================================================
+# 显存优化配置（高级）
+# ============================================================================
+memory_optimization:
+  # VAE Offload（将 VAE 保持在 CPU）
+  vae_offload: True        # 是否将 VAE offload 到 CPU
+  
+  # Cache Latents（缓存编码后的 latents）
+  cache_latents: True      # 是否缓存 latents
+  cache_to_disk: false      # 是否缓存到磁盘（而非内存）
+  cache_dir: "./cache"      # 缓存目录
+  
+  # Text Encoder Offload
+  te_offload: True         # 是否将 Text Encoders offload 到 CPU
+
+# ============================================================================
+# 保存配置
+# ============================================================================
+save:
+  # 保存路径
+  output_dir: "./lora_output"  # LoRA 权重保存目录
+  
+  # 保存频率
+  save_every_n_epochs: 5    # 每隔多少轮保存一次检查点
+  save_total_limit: 3       # 最多保留多少个检查点（0 表示不限制）
+  
+  # 保存格式
+  save_dtype: "float16"     # 保存精度：float16, bfloat16, float32
+
+# ============================================================================
+# 日志配置
+# ============================================================================
+logging:
+  # 日志级别
+  log_level: "INFO"         # DEBUG, INFO, WARNING, ERROR
+  
+  # 日志频率
+  log_every_n_steps: 10     # 每隔多少步打印一次日志
+  
+  # TensorBoard（可选）
+  use_tensorboard: false    # 是否使用 TensorBoard
+  tensorboard_dir: "./logs" # TensorBoard 日志目录
+
+# ============================================================================
+# 验证配置（可选）
+# ============================================================================
+validation:
+  enabled: True            # 是否启用验证
+  every_n_epochs: 1         # 每隔多少轮验证一次
+  save_dir: "./lora_output/samples"  # 验证采样结果保存目录
+  seed: 42                  # 验证采样随机种子（可选）
+  width: 512                # 采样宽度（不填则默认使用数据集分辨率）
+  height: 512               # 采样高度（不填则默认使用数据集分辨率）
+  external_infer: false     # 是否使用外部推理（当前禁用，直接在 trainer 内 offload 采样）
+  offload_mode: "sequential" # 推理 offload 模式：sequential/model/none
+  infer_dtype: "float16"     # 推理 dtype
+
+  # 验证样本
+  validation_prompts:
+    - "Please convert the low-light image to a perfectly exposed photograph with bright, natural lighting and clear details."
+  validation_image: "__LOCAL_PROJECT_ROOT__/test/input/0.png"  # 验证图像路径
+  
+  # 推理参数
+  num_inference_steps: 28
+  guidance_scale: 2.5

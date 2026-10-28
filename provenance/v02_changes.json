@@ -1,0 +1,221 @@
+{
+  "scope": "Exact file changes relative to supplied v01; excludes this change manifest and SHA256SUMS.txt to avoid hash recursion.",
+  "changes": [
+    {
+      "path": "CITATION.cff",
+      "v01_sha256": "f708f2b165e40d0baf1c34b7e550c766d734ef3cdcc33d86e376cffac793fc31",
+      "v02_sha256": "af1af04bb968ca254e7cb786f2b4886cca34da07c1b75f1c123db11a831d3f66",
+      "kind": "changed"
+    },
+    {
+      "path": "DISTRIBUTION.md",
+      "v01_sha256": "831dd35f32fa30a516edf78956e0e6d28caf661ed35043f980a02cab23dcd621",
+      "v02_sha256": "b8915c396944a9a477167121107a0a5a0700428228a6e556e3059a43b17262d6",
+      "kind": "changed"
+    },
+    {
+      "path": "README.md",
+      "v01_sha256": "a6a354b711aadab910a8b6e02489a9664c7dc977421a8574cf506eeedfb595b7",
+      "v02_sha256": "adcaea9d33a66400328dac0bdb0e1f9ec6047362d63cead141f2a05fd98fef31",
+      "kind": "changed"
+    },
+    {
+      "path": "README_zh.md",
+      "v01_sha256": "339524b19aa3b21aeb46a592860688868e733132382584f245236cca1757d4b5",
+      "v02_sha256": "da943afcc25fd887eabeba5debaab6aa7ee4146789f996b19172c6ebb48b1c58",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/CHANGELOG.md",
+      "v01_sha256": "469019970fbdc86f111c9af5898880bf38766fb5dd7549a40ce5659ee4fe906a",
+      "v02_sha256": "ec44da9e11d0fec9732843ff523e7cf72a85c9472bba034a545aefc4c8f1a311",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/DATA_AND_MODELS.md",
+      "v01_sha256": "eef5fe574c583d5ede258b1cd5ba2e27cbdf030fe0835d5203cd69a2ed991907",
+      "v02_sha256": "2218c39485bda9d416d5cacebdffa72bcbc9cd59241fccff62e402b3dbfb6198",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/DEPENDENCIES.md",
+      "v01_sha256": "79c2692a1b7bb6bfa57ef84e11b2b622c221a635476dd672e9f8542757636eda",
+      "v02_sha256": "b291461136117489d5caed9f59ed4126ed7c4ae1ceb41d212c0654da1b293cf4",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/ENGINEERING.md",
+      "v01_sha256": "6d49aa732334922bc4af01c38fb17a3940f666a0e77d72abedc2f95591b6d480",
+      "v02_sha256": "534b0f4512c3cbf063a9251cc077e22d2dd949d1c764ff375c71d7a054cc9717",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/METHOD_AND_ATTRIBUTION.md",
+      "v01_sha256": "17fbe580cc9654fba2af186ffeda7bb47b6da6380b73447f56de77644277bc18",
+      "v02_sha256": "649c631348e33273ffc2261b07758cd59654b92c425f18a6849a075aa1fb5e86",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/PAPER_CODE_MAP.md",
+      "v01_sha256": "fbd9c9f30a0196adb8905c5fdd4d9309484f092acf3981b6ace23c7b290573de",
+      "v02_sha256": "05ca081a74841c722f805228e76bb137480666816f1cdfb6f1ece8dff39960e7",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/REPRODUCIBILITY.md",
+      "v01_sha256": "8d4c4d3c00ab62eabb978c35b87aa9d5a1920f3b62d486e4ace9a56b5e2350c5",
+      "v02_sha256": "11647ca58f059ba856391fdcc01fc599f215288b4595d8603db73f1cf02a7891",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/THIRD_PARTY_NOTICES.md",
+      "v01_sha256": "af8c2af4c5cd3279b2fa14365944f065c4cfdf2deb6663b2626139b3e6f0da5f",
+      "v02_sha256": "1ec9046be84e4ce93b644bf388fc133a5d0890c2fb071dda40c70f01cded6004",
+      "kind": "changed"
+    },
+    {
+      "path": "docs/historical/LLE_README.md",
+      "v01_sha256": "5b4239f78b44785287646553fcda7095b1c7bf6a5c2eca51a242296ece0ace4f",
+      "v02_sha256": null,
+      "kind": "removed"
+    },
+    {
+      "path": "provenance/EXCLUSIONS.json",
+      "v01_sha256": null,
+      "v02_sha256": "83650d0509c5f14e9cbd27f1acd05daf23b0685a9e0f92142b58c070a3595be5",
+      "kind": "added"
+    },
+    {
+      "path": "provenance/INPUTS.json",
+      "v01_sha256": "b1b803b7c16bc8bc4dc00f6e50f43baffdff73763b76876f67e379b06fd45ba5",
+      "v02_sha256": "17184105db0d659dc0d86a74a7b71d1720d6aa4ac4bcc5ef262f4d60945a65c7",
+      "kind": "changed"
+    },
+    {
+      "path": "provenance/git_snapshot_comparison.json",
+      "v01_sha256": "10d456bdaab2018970f2713f9e44d4bba2152f5f30394bda15c0b120afb25bd9",
+      "v02_sha256": "41242e223d0284d260aff294f5b0abe8a3c98f6f24ca4db182f65bf7d0afc71b",
+      "kind": "changed"
+    },
+    {
+      "path": "provenance/source_manifest.json",
+      "v01_sha256": "1b1a345097d70b02341fe7ab251541dbd13ff663bdab18b54ca5d6a655a966a1",
+      "v02_sha256": "1abb3c64158d50255d45868dbd0d9efecf47bfedfbe935685bcbd17bf4e68cda",
+      "kind": "changed"
+    },
+    {
+      "path": "provenance/source_recommendations.json",
+      "v01_sha256": "bad0e86ef1f3fb2ca37ea6ab882065485faaa3c876e58257a3fbd8af4cd7a7d9",
+      "v02_sha256": null,
+      "kind": "removed"
+    },
+    {
+      "path": "provenance/v02_engineering_changes.patch",
+      "v01_sha256": null,
+      "v02_sha256": "c7d68cc2bd974eb972431d6a4d4f8d35b4c289e6e1330449b6ccb259e1a27a80",
+      "kind": "added"
+    },
+    {
+      "path": "requirements-conditional.in",
+      "v01_sha256": "6ec8f1246ee858b6e71eca0f841d1a9631666f3797b016228d351a8a5fd3dc4c",
+      "v02_sha256": "8d78f146e69358f82df91ed4d0f966ea4b5b822886b62ac0c0142b583cf98803",
+      "kind": "changed"
+    },
+    {
+      "path": "src/DIANet/LLE/README.md",
+      "v01_sha256": "9dc6f25e9fd91a4a3f18c674e8d3141fb27e76a376b31e702d70cba451d4f4bf",
+      "v02_sha256": "d3b3d2fabeba0e728596f87f535d9c2f6c95dcbb926090f1f42c2b742e922ece",
+      "kind": "changed"
+    },
+    {
+      "path": "src/DIANet/LLE/infer_dual_route.py",
+      "v01_sha256": "ffe0d59922bd69ad962a6bbceef0fb03d9737d8ca11acddf54ab9723a7d836a5",
+      "v02_sha256": "01936245d4084ee7ea72d4738891c110be14e5e4ba4cad79642f6716dab62fd0",
+      "kind": "changed"
+    },
+    {
+      "path": "src/DIANet/adapter_checkpoint.py",
+      "v01_sha256": null,
+      "v02_sha256": "d2b40836f5218eccc4e6a2a7df0f4af668a0bd42a7f29bc9e2dd2ffa09db4b39",
+      "kind": "added"
+    },
+    {
+      "path": "src/DIANet/inference/README.md",
+      "v01_sha256": "48972584abec2acd283b8fc7d3fa8402bc5cb9632d1b325655c99270d0172e4f",
+      "v02_sha256": "4483ab7494ac7bfe94da3e765637494941438c2fabd0c5446b1ce90caec32428",
+      "kind": "changed"
+    },
+    {
+      "path": "src/DIANet/inference/inference_moe_lora.py",
+      "v01_sha256": "f0becbf49a55eb2b5ca827650ac96fd2a2b9b038e73792c24f88e41967b2d2d0",
+      "v02_sha256": "a2d883d2e0388b22ca9d970e6a69231bcc19c770dd823ef17beaaf4310be281f",
+      "kind": "changed"
+    },
+    {
+      "path": "src/DIANet/train/core/optimizer.py",
+      "v01_sha256": "7b60fae7a68bb153bb57d9bec35f5e817ce1e7b882985bf7b75e9df9ea3bc7b9",
+      "v02_sha256": "ad5edf1480cc4bc3529910e7ef5f259fb9dace027febf72b570133364953f1a3",
+      "kind": "changed"
+    },
+    {
+      "path": "src/DIANet/train/core/saver.py",
+      "v01_sha256": "025bada151217d5d052a50c95214f79dda023d744e409bddc535623c8762c2e6",
+      "v02_sha256": "a3502b79f351e84402313193a39e8b145b906aa30ce58cbb297a3cac10aec917",
+      "kind": "changed"
+    },
+    {
+      "path": "src/DIANet/train/core/trainer.py",
+      "v01_sha256": "50535c4b2c31338cad28419c10c55c0007ffb767c39ae5cee93f6b1386603da0",
+      "v02_sha256": "8533e3cbf741e30e91ec15b7790da779b231192df1453da7bc6b0eaed157b778",
+      "kind": "changed"
+    },
+    {
+      "path": "src/DIANet/train/train_lora.py",
+      "v01_sha256": "40a1b00b1a0706174d4366f8d3f15737a32beca4aeb6fcfeb44eef9670aa7c7f",
+      "v02_sha256": "103bf7c9ef36df41cb363f8ff87f75d60c066c43d550e86a64a6134c85601b27",
+      "kind": "changed"
+    },
+    {
+      "path": "tools/review.py",
+      "v01_sha256": "a03df16b192d9c669546578f2df189d421647b0222ed0070ed0b0a47ca9fce7e",
+      "v02_sha256": "2f440bc9c6992c82db80b33138d3b4cf14fe8dd705d11ffc21a9728a76c5e77c",
+      "kind": "changed"
+    },
+    {
+      "path": "verification/REPORT.md",
+      "v01_sha256": "3fba828f83f985101846df2e5a58123561b32455c9842ffd7f1ef23901481a2a",
+      "v02_sha256": "837db7a01e6f4678d1351d9521bd000b57c2e0114d0ad6131b1ac11d1776c403",
+      "kind": "changed"
+    },
+    {
+      "path": "verification/adapter_contract_results.json",
+      "v01_sha256": null,
+      "v02_sha256": "009f7df1a50dd05d28aaf10addc2436c85e2c0d8a0184adaaffe10997bd823a1",
+      "kind": "added"
+    },
+    {
+      "path": "verification/engineering_verification.json",
+      "v01_sha256": "13216e6fe2cced8aa2650b6753f9ad877d743df12ec6ea509480875999f5908f",
+      "v02_sha256": null,
+      "kind": "removed"
+    },
+    {
+      "path": "verification/independent_review.json",
+      "v01_sha256": "cf7ddc892bf5ea091004f31f82f4ff0fe0f002ab5461f7ba9a8c541ed9733420",
+      "v02_sha256": null,
+      "kind": "removed"
+    },
+    {
+      "path": "verification/packaging_checks.json",
+      "v01_sha256": "ffe6be136776f916d309cc5f7091598cb3fcab3eae07eef3999c8b30e6055ac5",
+      "v02_sha256": null,
+      "kind": "removed"
+    },
+    {
+      "path": "verification/release_boundary_results.json",
+      "v01_sha256": null,
+      "v02_sha256": "4fe80eef64b0005e08c840588133a843f716739d58b53fc7dd3b3a6ac5b9ec9f",
+      "kind": "added"
+    }
+  ]
+}

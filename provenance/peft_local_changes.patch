@@ -1,0 +1,371 @@
+--- a/src/peft/tuners/lora/config.py
++++ b/src/peft/tuners/lora/config.py
+@@ -674,6 +674,22 @@
+             )
+         },
+     )
++    # MoE-LoRA extension (project-specific)
++    num_experts: int = field(default=6, metadata={"help": "Number of experts for MoE-LoRA layers."})
++    expert_rank: int = field(default=32, metadata={"help": "Rank for each expert in MoE-LoRA."})
++    expert_alpha: float = field(default=32.0, metadata={"help": "Alpha scaling for each MoE-LoRA expert."})
++    top_k: int = field(default=1, metadata={"help": "Number of experts to activate (top-k routing)."})
++    blc_alpha: float = field(default=0.0, metadata={"help": "Load-balancing loss alpha for MoE-LoRA."})
++    blc_weight: float = field(default=0.0, metadata={"help": "Load-balancing loss weight for MoE-LoRA."})
++    module_modes: Optional[dict[str, str]] = field(
++        default_factory=dict,
++        metadata={
++            "help": (
++                "Per-module override for adapter类型: 'moe'|'lora'|'freeze'. "
++                "Key can be完整模块名或后缀匹配，例如 'attn.to_q'。"
++            )
++        },
++    )
+ 
+     def to_dict(self):
+         """
+@@ -751,6 +767,10 @@
+                 )
+             if self.use_dora:
+                 raise ValueError("The argument lora_bias=True is not supported for DoRA, please pass use_dora=False")
++
++        # normalize module_modes
++        if self.module_modes is None:
++            self.module_modes = {}
+ 
+         if self.alora_invocation_tokens is not None and self.task_type != "CAUSAL_LM":
+             warnings.warn("aLoRA is currently only supported for CAUSAL_LM task.")
+--- a/src/peft/tuners/lora/layer.py
++++ b/src/peft/tuners/lora/layer.py
+@@ -14,6 +14,7 @@
+ from __future__ import annotations
+ 
+ import math
++import fnmatch
+ import warnings
+ from contextlib import contextmanager
+ from typing import Any, Optional, Union
+@@ -93,7 +94,7 @@
+ 
+ class LoraLayer(BaseTunerLayer):
+     # All names of layers that may contain (trainable) adapter weights
+-    adapter_layer_names: tuple[str, ...] = ("lora_A", "lora_B", "lora_embedding_A", "lora_embedding_B")
++    adapter_layer_names: tuple[str, ...] = ("lora_A", "lora_B", "lora_embedding_A", "lora_embedding_B", "lora_route")
+     # All names of other parameters that may contain adapter-related parameters
+     other_param_names: tuple[str, ...] = ("r", "lora_alpha", "scaling", "lora_dropout")
+ 
+@@ -108,6 +109,8 @@
+         # For Embedding layer
+         self.lora_embedding_A = nn.ParameterDict({})
+         self.lora_embedding_B = nn.ParameterDict({})
++        # For MoE LoRA routing
++        self.lora_route = nn.ModuleDict({})
+         # Mark the weight as unmerged
+         self._disable_adapters = False
+         self.merged_adapters = []
+@@ -620,18 +623,63 @@
+         self.fan_in_fan_out = fan_in_fan_out
+ 
+         self._active_adapter = adapter_name
+-        self.update_layer(
+-            adapter_name,
+-            r,
+-            lora_alpha=lora_alpha,
+-            lora_dropout=lora_dropout,
+-            init_lora_weights=init_lora_weights,
+-            use_rslora=use_rslora,
+-            use_dora=use_dora,
+-            use_alora=use_alora,
+-            lora_bias=lora_bias,
+-            arrow_config=arrow_config,
+-        )
++        # MoE-LoRA parameters (passed through kwargs)
++        self.num_experts = kwargs.get("num_experts", 1)
++        self.expert_rank = kwargs.get("expert_rank", r)
++        self.expert_alpha = kwargs.get("expert_alpha", lora_alpha)
++        self.top_k = kwargs.get("top_k", 1)
++        self.moe_lora = False
++
++        # Determine whether this layer uses MoE-LoRA based on current_key
++        current_key = kwargs.get("current_key", "")
++        # module_modes 支持精确配置：按 key 完整匹配/后缀匹配/通配符匹配
++        module_modes = kwargs.get("module_modes") or {}
++        explicit_mode = None
++        for pattern, mode in module_modes.items():
++            if (
++                current_key == pattern
++                or current_key.endswith(pattern)
++                or ("*" in pattern and fnmatch.fnmatch(current_key, pattern))
++            ):
++                explicit_mode = mode
++                break
++
++        if explicit_mode == "moe":
++            self.moe_lora = True
++        elif explicit_mode == "lora":
++            self.moe_lora = False
++        elif explicit_mode == "freeze":
++            self.moe_lora = False
++        elif "ff.net" in current_key or "proj_out" in current_key:
++            self.moe_lora = True
++
++        if self.moe_lora:
++            self.update_moe_layer(
++                adapter_name,
++                r,
++                lora_alpha=lora_alpha,
++                lora_dropout=lora_dropout,
++                init_lora_weights=init_lora_weights,
++                use_rslora=use_rslora,
++                use_dora=use_dora,
++                lora_bias=lora_bias,
++                num_experts=self.num_experts,
++                expert_rank=self.expert_rank,
++                expert_alpha=self.expert_alpha,
++            )
++        else:
++            self.update_layer(
++                adapter_name,
++                r,
++                lora_alpha=lora_alpha,
++                lora_dropout=lora_dropout,
++                init_lora_weights=init_lora_weights,
++                use_rslora=use_rslora,
++                use_dora=use_dora,
++                use_alora=use_alora,
++                lora_bias=lora_bias,
++                arrow_config=arrow_config,
++            )
+         self.is_target_conv_1d_layer = is_target_conv_1d_layer
+ 
+     def resolve_lora_variant(
+@@ -651,6 +699,109 @@
+             return ALoraLinearVariant()
+         else:
+             return DoraLinearVariant()
++
++    def update_moe_layer(
++        self,
++        adapter_name,
++        r,
++        lora_alpha,
++        lora_dropout,
++        init_lora_weights,
++        use_rslora,
++        use_dora: bool = False,
++        lora_bias: bool = False,
++        num_experts: int = 1,
++        expert_rank: int = 4,
++        expert_alpha: float = 4,
++    ):
++        expert_list = [f"expert_{i}" for i in range(num_experts)]
++        if r <= 0 or num_experts <= 0 or expert_rank <= 0:
++            raise ValueError(f"`r` should be a positive integer value but the value passed is {r}")
++        if self.top_k > num_experts:
++            raise ValueError(f"`top_k` should be a positive integer value but the value passed is {self.top_k}")
++
++        self.r[adapter_name] = expert_rank
++        self.lora_alpha[adapter_name] = expert_alpha
++        if lora_dropout > 0.0:
++            lora_dropout_layer = nn.Dropout(p=lora_dropout)
++        else:
++            lora_dropout_layer = nn.Identity()
++
++        self.lora_dropout.update(nn.ModuleDict({adapter_name: lora_dropout_layer}))
++        # experts
++        for expert_name in expert_list:
++            self.lora_A[expert_name] = nn.Linear(self.in_features, expert_rank, bias=False)
++            self.lora_B[expert_name] = nn.Linear(expert_rank, self.out_features, bias=lora_bias)
++            self.r[expert_name] = expert_rank
++            self.lora_alpha[expert_name] = expert_alpha
++            self.lora_bias[expert_name] = lora_bias
++            self.lora_dropout.update(nn.ModuleDict({expert_name: lora_dropout_layer}))
++            if use_rslora:
++                self.scaling[expert_name] = expert_alpha / math.sqrt(expert_rank)
++            else:
++                self.scaling[expert_name] = expert_alpha / expert_rank
++
++        self.lora_route[adapter_name] = nn.Linear(self.in_features, num_experts, bias=False)
++        self.lora_bias[adapter_name] = lora_bias
++        if use_rslora:
++            self.scaling[adapter_name] = expert_alpha / math.sqrt(expert_rank)
++        else:
++            self.scaling[adapter_name] = expert_alpha / expert_rank
++
++        # init
++        if isinstance(init_lora_weights, str) and init_lora_weights.startswith("pissa"):
++            with gather_params_ctx(self.get_base_layer().weight):
++                self.pissa_init(adapter_name, init_lora_weights)
++        elif isinstance(init_lora_weights, str) and init_lora_weights.lower() == "olora":
++            with gather_params_ctx(self.get_base_layer().weight):
++                self.olora_init(adapter_name)
++        elif init_lora_weights == "loftq":
++            with gather_params_ctx(self.get_base_layer().weight):
++                self.loftq_init(adapter_name)
++        elif init_lora_weights == "eva":
++            nn.init.zeros_(self.lora_B[adapter_name].weight)
++        elif init_lora_weights:
++            self.reset_lora_parameters(adapter_name, init_lora_weights)
++            for expert_name in expert_list:
++                self.reset_lora_parameters(expert_name, init_lora_weights)
++
++        # move to correct device
++        self._move_adapter_to_device_of_base_layer(adapter_name)
++        for expert_name in expert_list:
++            self._move_adapter_to_device_of_base_layer(expert_name)
++
++        self.use_dora[adapter_name] = False if use_dora else False
++        self.use_rslora[adapter_name] = use_rslora
++        # CRITICAL FIX: Store expert list for MoE-LoRA layers
++        # Experts are not added to active_adapters because they don't have separate configs
++        # Instead, they are stored separately and used automatically in moe_forward
++        self._moe_expert_list = expert_list if expert_list else []
++        self.set_adapter(self.active_adapters)
++
++    def set_adapter(self, adapter_names: str | list[str], inference_mode: bool = False) -> None:
++        """
++        Override set_adapter to protect MoE expert parameters.
++
++        CRITICAL FIX: After calling parent set_adapter, re-enable requires_grad for experts.
++        This ensures experts remain trainable even when set_adapter is called during training.
++
++        Args:
++            adapter_names: The name(s) of the adapter(s) to activate
++            inference_mode: Whether to freeze the adapters (requires_grad=False)
++        """
++        # Call parent implementation
++        super().set_adapter(adapter_names, inference_mode=inference_mode)
++
++        # CRITICAL: Re-enable expert parameters after set_adapter
++        # The parent set_adapter sets requires_grad=False for all non-active adapters
++        # Since experts are not in active_adapters, they get disabled
++        # We need to re-enable them here
++        if hasattr(self, '_moe_expert_list') and self._moe_expert_list and not inference_mode:
++            for expert_name in self._moe_expert_list:
++                if expert_name in self.lora_A:
++                    self.lora_A[expert_name].requires_grad_(True)
++                if expert_name in self.lora_B:
++                    self.lora_B[expert_name].requires_grad_(True)
+ 
+     def merge(self, safe_merge: bool = False, adapter_names: Optional[list[str]] = None) -> None:
+         """
+@@ -776,7 +927,60 @@
+ 
+         return output_tensor
+ 
++    def moe_forward(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> torch.Tensor:
++        moe_type = "token_wise"
++
++        self._check_forward_args(x, *args, **kwargs)
++        adapter_names = kwargs.pop("adapter_names", None)
++        if self.disable_adapters:
++            if self.merged:
++                self.unmerge()
++            return self.base_layer(x, *args, **kwargs)
++        if adapter_names is not None or self.merged:
++            # fallback to standard forward path when adapters are mixed/merged
++            return super().forward(x, *args, adapter_names=adapter_names, **kwargs)
++
++        result = self.base_layer(x, *args, **kwargs)
++        torch_result_dtype = result.dtype
++        activate_adapter_name = self.active_adapters[0]
++
++        if moe_type == "token_wise":
++            route_logits = self.lora_route[activate_adapter_name](x)
++            top_k_probs, top_k_indices = torch.topk(route_logits, k=self.top_k, dim=-1)
++            top_k_probs = F.softmax(top_k_probs, dim=-1, dtype=torch.float32).to(result.dtype)
++
++            route_weight = torch.zeros_like(route_logits)
++            route_weight = route_weight.scatter_(-1, top_k_indices, top_k_probs)
++
++            for i in range(self.num_experts):
++                expert_name = f"expert_{i}"
++                lora_A = self.lora_A[expert_name]
++                lora_B = self.lora_B[expert_name]
++                scaling = self.scaling[expert_name]
++                dropout = self.lora_dropout[expert_name]
++                result += lora_B(lora_A(dropout(x))) * scaling * torch.unsqueeze(route_weight[:, :, i], -1)
++
++        elif moe_type == "sequence_wise":
++            route_logits = self.lora_route[activate_adapter_name](x[:, 0])
++            route_logits = route_logits.unsqueeze(1).repeat(1, x.shape[1], 1)
++            top_k_probs, top_k_indices = torch.topk(route_logits, k=self.top_k, dim=-1)
++            top_k_probs = F.softmax(top_k_probs, dim=-1, dtype=torch.float32).to(result.dtype)
++            route_weight = torch.zeros_like(route_logits)
++            route_weight = route_weight.scatter_(-1, top_k_indices, top_k_probs)
++
++            for i in range(self.num_experts):
++                expert_name = f"expert_{i}"
++                lora_A = self.lora_A[expert_name]
++                lora_B = self.lora_B[expert_name]
++                scaling = self.scaling[expert_name]
++                dropout = self.lora_dropout[expert_name]
++                result += lora_B(lora_A(dropout(x))) * scaling * torch.unsqueeze(route_weight[:, :, i], -1)
++
++        return result.to(torch_result_dtype)
++
+     def forward(self, x: torch.Tensor, *args: Any, **kwargs: Any) -> torch.Tensor:
++        if getattr(self, "moe_lora", False):
++            return self.moe_forward(x, *args, **kwargs)
+         self._check_forward_args(x, *args, **kwargs)
+         adapter_names = kwargs.pop("adapter_names", None)
+         variant_kwargs = {k: kwargs.pop(k, None) for k in VARIANT_KWARG_KEYS}  # don't pass these to base_layer
+--- a/src/peft/tuners/lora/model.py
++++ b/src/peft/tuners/lora/model.py
+@@ -16,6 +16,7 @@
+ import math
+ import operator
+ import warnings
++import fnmatch
+ from contextlib import contextmanager
+ from dataclasses import replace
+ from functools import partial, reduce
+@@ -183,6 +184,16 @@
+         if current_key is None:
+             raise ValueError("Current Key shouldn't be `None`")
+ 
++        # module_modes 精确控制：遇到 freeze 时跳过注入
++        module_modes = lora_config.module_modes or {}
++        explicit_mode = None
++        for pattern, mode in module_modes.items():
++            if fnmatch.fnmatch(current_key, pattern) or current_key.endswith(pattern) or current_key == pattern:
++                explicit_mode = mode
++                break
++        if explicit_mode == "freeze":
++            return
++
+         if lora_config.target_parameters:
+             # Right now, unfortunately, we don't support multiple adapters with target_parameters on the same model.
+             other_configs_use_target_params = any(
+@@ -218,6 +229,16 @@
+             "loaded_in_8bit": getattr(self.model, "is_loaded_in_8bit", False),
+             "loaded_in_4bit": getattr(self.model, "is_loaded_in_4bit", False),
+             "parameter_name": parameter_name,
++            # pass along context for MoE routing and layer selection
++            "current_key": current_key,
++            "target_name": target_name,
++            "num_experts": lora_config.num_experts,
++            "expert_rank": lora_config.expert_rank,
++            "expert_alpha": lora_config.expert_alpha,
++            "top_k": lora_config.top_k,
++            "blc_alpha": lora_config.blc_alpha,
++            "blc_weight": lora_config.blc_weight,
++            "module_modes": lora_config.module_modes,
+         }
+ 
+         # for torchao merging, we need the get_apply_tensor_subclass from the quantization config
+--- a/src/peft/utils/save_and_load.py
++++ b/src/peft/utils/save_and_load.py
+@@ -110,7 +110,12 @@
+                         to_return[bias_name] = state_dict[bias_name]
+         else:
+             raise NotImplementedError
+-        to_return = {k: v for k, v in to_return.items() if (("lora_" in k and adapter_name in k) or ("bias" in k))}
++        # CRITICAL FIX: Include MoE expert weights (expert_0, expert_1, ...) in addition to main adapter
++        # Expert weights contain "expert_" instead of adapter_name, so we need to include them too
++        to_return = {
++            k: v for k, v in to_return.items()
++            if (("lora_" in k and (adapter_name in k or "expert_" in k)) or ("bias" in k))
++        }
+         if config.peft_type == PeftType.ADALORA:
+             rank_pattern = config.rank_pattern
+             if rank_pattern is not None:

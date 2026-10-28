@@ -1,0 +1,89 @@
+# 测试配置 - 双路由MoE LoRA模式（rank=1）
+# 使用随机噪声数据集测试
+
+model:
+  base_model: "../FLUX.1-dev"  # 使用本地模型路径
+  dtype: "bfloat16"
+  low_cpu_mem_usage: true
+
+  # PhotoDoodle预训练权重
+  photodoodle:
+    enabled: true
+    lora_path: "../lora_model"
+    lora_weight_name: "pretrain.safetensors"
+    fuse_before_training: true
+    save_fused_model: false
+
+data:
+  input_image_dir: "./data/test_random/input"
+  target_image_dir: "./data/test_random/target"
+  prompt: "enhance the low-light image, improve brightness and details"
+  resolution: 512
+  center_crop: false
+  random_flip: false
+  num_workers: 0
+
+  # 曝光度分类（双路由需要）
+  exposure_annotation:
+    auto_classify: true
+    method: "mean_brightness"
+
+lora:
+  # 双路由MoE LoRA模式
+  mode: "moe_dual"  # standard / moe_single / moe_dual
+
+  target_modules:
+    - "single_transformer_blocks.0.attn.to_q"
+    - "single_transformer_blocks.0.attn.to_k"
+    - "single_transformer_blocks.0.attn.to_v"
+
+  rank: 1  # 基础rank
+  alpha: 1.0
+  dropout: 0.0
+  init_method: "kaiming"
+
+  # MoE配置
+  moe:
+    num_experts: 8  # 总专家数（4个specific + 4个shared）
+    expert_rank: 1  # 每个专家的rank
+    expert_alpha: 1.0
+
+    # Style-Specific配置
+    specific_config:
+      num_categories: 4  # 曝光类别数
+      category_mapping:
+        extremely_dark: 0
+        very_dark: 1
+        dark: 2
+        moderate: 3
+      exposure_thresholds:
+        method: "mean_brightness"
+        thresholds: [0.1, 0.2, 0.3, 0.5]
+
+    # Style-Shared配置
+    shared_config:
+      num_experts: 4  # 共享专家数
+      top_k: 1  # 激活1个共享专家
+      router_hidden_dim: 512
+      load_balance_weight: 0.01
+
+train:
+  num_epochs: 2  # 快速测试
+  batch_size: 1
+  learning_rate: 1.0e-4
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  max_sequence_length: 512
+  save_every_n_epochs: 1
+  cfg_scale: 3.5
+
+save:
+  output_dir: "./outputs/test_moe_dual_rank1"
+  save_dtype: "float16"
+  save_total_limit: 2
+
+device: "cuda"
+
+# 显存优化
+quantize: true
+gradient_checkpointing: true

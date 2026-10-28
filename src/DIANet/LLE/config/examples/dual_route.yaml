@@ -1,0 +1,169 @@
+# ==============================================================================
+# 双路由MoE-LoRA暗光增强训练配置文件
+# ==============================================================================
+#
+# 双路由模式特点：
+# - Style-Specific Router: 根据曝光度类别硬性指定专家（4个专家）
+# - Style-Shared Router: 动态学习选择共享专家（4个专家，top-1）
+# - 总共8个专家 (4 specific + 4 shared)
+#
+# ==============================================================================
+
+# ============================================================================
+# 基础配置
+# ============================================================================
+job_name: "moe_lora_dual_route_low_light"
+device: "cuda"
+seed: 42
+
+# ============================================================================
+# LoRA配置
+# ============================================================================
+lora:
+  # 路由模式
+  routing_mode: "dual"                    # 双路由模式
+
+  # 基础参数（用于标准LoRA，如果有的话）
+  rank: 16
+  alpha: 16
+  dropout: 0.0
+
+  # MoE配置
+  moe:
+    # 总专家数（双路由模式：specific + shared）
+    num_experts: 9                        # 5个specific + 4个shared
+
+    # 每个专家的参数
+    expert_rank: 8
+    expert_alpha: 8.0
+
+    # Style-Specific配置（针对曝光程度）
+    specific_config:
+      num_categories: 5                   # 曝光类别数
+      category_mapping:
+        extremely_dark: 0                 # 极暗
+        very_dark: 1                      # 很暗
+        dark: 2                           # 暗
+        moderate: 3                       # 中等
+        normal: 4                         # 正常
+
+      # 自动分类阈值（基于平均像素亮度）
+      exposure_thresholds:
+        method: "mean_brightness"         # 或 "histogram" 或 "percentile"
+        thresholds: [0.1, 0.2, 0.3, 0.5] # 亮度阈值
+
+    # Style-Shared配置
+    shared_config:
+      num_experts: 4                      # 共享专家数
+      top_k: 2                            # 激活2个共享专家
+      router_hidden_dim: 512
+      load_balance_weight: 0.01           # 负载均衡损失权重
+
+  # 层级控制（哪些层使用MoE-LoRA）
+  # 使用通配符模式匹配
+  module_modes:
+    # 示例：对Mock FLUX的所有block的第一个线性层使用MoE-LoRA
+    "blocks.*.0": "moe"                   # Mock FLUX: blocks.[0-3].0 -> MoE-LoRA
+
+# ============================================================================
+# 数据集配置
+# ============================================================================
+data:
+  # 数据路径
+  input_image_dir: "./data/low_light/input"
+  target_image_dir: "./data/low_light/target"
+
+  # 提示词
+  prompt: "enhance the low-light image to well-exposed with natural lighting"
+
+  # 图像处理
+  resolution: 256                         # Mock FLUX使用较小分辨率
+  center_crop: false
+  random_flip: true
+
+  # 曝光类别标注（双路由模式需要）
+  classify_exposure_category: true        # 自动分类曝光程度
+  exposure_method: "mean_brightness"      # 分类方法
+  exposure_thresholds: [0.1, 0.2, 0.3, 0.5]  # 阈值
+
+  # 数据加载
+  batch_size: 2
+  num_workers: 2
+  pin_memory: true
+
+# ============================================================================
+# 训练配置
+# ============================================================================
+training:
+  num_epochs: 10
+  gradient_accumulation_steps: 1
+
+  learning_rate: 1e-4
+  lr_scheduler: "constant"                # constant, cosine, linear
+  lr_warmup_steps: 0
+
+  optimizer: "adamw"                      # adamw 或 adamw8bit
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1e-8
+  adam_weight_decay: 0.01
+  max_grad_norm: 1.0
+
+  max_sequence_length: 512
+
+# ============================================================================
+# 损失函数配置
+# ============================================================================
+loss:
+  # Flow Matching Loss
+  flow_matching:
+    weight: 1.0
+    weighting_scheme: "none"             # Mock FLUX使用简单权重
+
+  # 对抗损失（阶段4）
+  adversarial:
+    enabled: true                        # 启用对抗训练
+    weight: 0.1                          # 对抗损失权重
+    loss_type: "hinge"                   # 损失类型: hinge, gan, wgan
+    discriminator:
+      image_channels: 3
+      hidden_dim: 256                    # 判别器隐藏层维度
+      num_layers: 3                      # CNN层数
+      learning_rate: 1e-4                # 判别器学习率
+      adam_beta1: 0.5                    # Adam beta1（判别器通常用0.5）
+      adam_beta2: 0.999                  # Adam beta2
+
+  # 负载均衡损失（仅双路由的Shared部分）
+  load_balance:
+    weight: 0.01                          # 负载均衡损失权重
+
+# ============================================================================
+# 保存配置
+# ============================================================================
+save:
+  output_dir: "./outputs/dual_route"
+  save_every_n_epochs: 5
+  save_final_only: false
+
+# ============================================================================
+# 日志配置
+# ============================================================================
+logging:
+  log_level: "INFO"
+  log_every_n_steps: 10
+
+# ============================================================================
+# 验证配置
+# ============================================================================
+validation:
+  enabled: false                          # Mock FLUX简化版暂不验证
+  every_n_epochs: 5
+
+# ============================================================================
+# Mock FLUX配置
+# ============================================================================
+mock_flux:
+  enabled: true                           # 使用Mock FLUX进行测试
+  num_blocks: 4                           # Mock transformer blocks数量
+  hidden_size: 256                        # 隐藏层维度
+  vae_latent_channels: 16                 # VAE latent通道数

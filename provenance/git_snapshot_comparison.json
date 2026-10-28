@@ -1,0 +1,75 @@
+{
+  "scope": "Independent original ZIP byte comparison with its recorded Git HEAD objects; no project execution. Supersedes v01 partial-extraction missing-file lists.",
+  "license_comparison": [
+    {
+      "component": "peft",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "byte_identical": true
+    },
+    {
+      "component": "diffusers",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "byte_identical": true
+    },
+    {
+      "component": "PhotoDoodle",
+      "bytes": 1065,
+      "sha256": "ccfcfdcb8084239ee8fa20a60c87ad268dd3f625ea34bf2b4b9ba418135ca85a",
+      "byte_identical": true
+    },
+    {
+      "component": "ICEdit",
+      "bytes": 16970,
+      "sha256": "a8abe6ea7f398136780a1aa11683ad73a0d620d9db131c823737afe0126de998",
+      "byte_identical": true
+    }
+  ],
+  "peft_patch_exact_regeneration_match": true,
+  "peft": {
+    "head": "b10527e82c2171568f538f5b822817e8a753672a",
+    "tracked_at_head": 635,
+    "changed_count": 4,
+    "missing_from_original_count": 0,
+    "untracked_noncache": [],
+    "runtime_source_files_noncache": 189,
+    "packaged_src_files": 189,
+    "changed_files": [
+      {
+        "path": "src/peft/tuners/lora/config.py",
+        "head_blob_sha1": "8992b12296f95be8118901fe19f7cab0f7fd9a74",
+        "snapshot_blob_sha1": "12be53f2d43b22ecb014f0d46c4d31fcba0e685d",
+        "snapshot_sha256": "93fc66fd78c6810d99a14fc8a6b5ae9844824e4f09ae9e17c74b33c21d0f58db"
+      },
+      {
+        "path": "src/peft/tuners/lora/layer.py",
+        "head_blob_sha1": "88862158a15ff2e5aea8ffed882912b711f4ba2e",
+        "snapshot_blob_sha1": "b311467c93ef840aa7cdca660facc3026f48a612",
+        "snapshot_sha256": "6e6df259c94cd8d3825f2cbf3d7a83aabb4f713e3188f6753e398e60c50e6ff9"
+      },
+      {
+        "path": "src/peft/tuners/lora/model.py",
+        "head_blob_sha1": "4ae7e5b6998ac55d21eee6ac0a7fc0c1766c9256",
+        "snapshot_blob_sha1": "db368aeba404870130979d9a2596cd3bf6fe99a9",
+        "snapshot_sha256": "b4c892a09885e91325cc6dcd8fed4a74c314e4b8a26d8ef7e7c6b1c961109503"
+      },
+      {
+        "path": "src/peft/utils/save_and_load.py",
+        "head_blob_sha1": "778e6964103c44215abc0c39fd57e93d7065eacc",
+        "snapshot_blob_sha1": "e33e5514677eaa59517c8b3da9f64ff68a4596d9",
+        "snapshot_sha256": "89d567095c884a92a76e11d1dc4fdb460d48f9e8b4866020415a438e54bb0020"
+      }
+    ]
+  },
+  "diffusers": {
+    "head": "1b91856d0eee7b6fb58340e9b54ea2c3d5424311",
+    "tracked_at_head": 2289,
+    "changed_count": 0,
+    "missing_from_original_count": 0,
+    "untracked_noncache": [],
+    "runtime_source_files_noncache": 774,
+    "packaged_src_files": 774,
+    "changed_files": []
+  }
+}

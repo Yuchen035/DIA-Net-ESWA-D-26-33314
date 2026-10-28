@@ -1,0 +1,199 @@
+# ==============================================================================
+# MoE-LoRA单路由模式配置示例
+# ==============================================================================
+#
+# 此配置演示如何使用MoE-LoRA单路由模式训练低光增强模型
+#
+# 特点：
+# - 使用StandardRouter进行专家选择
+# - 支持负载均衡损失
+# - 可以使用Mock FLUX进行快速验证
+# ==============================================================================
+
+# ============================================================================
+# 基础配置
+# ============================================================================
+job_name: "moe_lora_single_route_test"
+device: "cuda"
+gpu_id: 0
+seed: 42
+
+# ============================================================================
+# 模型配置
+# ============================================================================
+model:
+  # 使用Mock FLUX进行测试（快速验证）
+  # 如需使用真实FLUX，改为 "black-forest-labs/FLUX.1-dev"
+  base_model: "mock-flux-dev"
+  dtype: "float32"  # Mock FLUX使用float32；真实FLUX使用bfloat16
+
+# ============================================================================
+# LoRA配置 - MoE单路由模式
+# ============================================================================
+lora:
+  # 使用module_modes进行细粒度控制
+  module_modes:
+    # Mock FLUX的blocks使用MoE-LoRA
+    "blocks.0.0": "moe"
+    "blocks.1.0": "moe"
+    "blocks.2.0": "moe"
+    "blocks.3.0": "moe"
+
+    # 其他层冻结
+    "*": "freeze"
+
+  # LoRA基础参数
+  rank: 16
+  alpha: 16.0
+  dropout: 0.0
+  init_method: "kaiming"
+
+  # MoE-LoRA配置
+  moe:
+    enabled: true
+    num_experts: 4              # 4个专家
+    routing_mode: "single"      # 单路由模式
+
+    # Router配置
+    router:
+      top_k: 2                  # 每次选择Top-2专家
+      use_noisy_gating: false   # 不使用噪声门控
+      noise_epsilon: 0.01       # 噪声强度（如果启用）
+
+# ============================================================================
+# 数据配置
+# ============================================================================
+data:
+  # 数据集路径
+  train_data_dir: "./data/train"
+  input_image_dir: "input"      # 低光图像目录
+  target_image_dir: "target"    # 正常光照图像目录
+
+  # 图像设置
+  resolution: 256               # Mock FLUX使用256；真实FLUX使用512或1024
+  center_crop: true
+  random_flip: true
+
+  # DataLoader设置
+  batch_size: 2
+  num_workers: 4
+  pin_memory: true
+
+# ============================================================================
+# 训练配置
+# ============================================================================
+train:
+  # 训练轮数
+  num_epochs: 10
+
+  # 优化器
+  optimizer:
+    type: "adamw"
+    learning_rate: 1.0e-4
+    weight_decay: 0.01
+    betas: [0.9, 0.999]
+
+  # 学习率调度
+  lr_scheduler:
+    type: "cosine"
+    warmup_steps: 100
+
+  # 梯度相关
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+
+  # 其他训练参数
+  max_sequence_length: 512      # T5最大序列长度
+  cfg_scale: 3.5                # Classifier-free guidance scale
+
+  # Mixed precision
+  mixed_precision: false        # Mock FLUX不需要；真实FLUX使用true
+
+# ============================================================================
+# 损失函数配置
+# ============================================================================
+loss:
+  # Flow Matching Loss（主损失）
+  flow_matching:
+    weight: 1.0
+    weighting_scheme: "uniform"  # "uniform" 或 "logit_normal"
+
+  # 负载均衡损失（MoE-LoRA特有）
+  load_balance:
+    enabled: true
+    weight: 0.01                 # 负载均衡损失权重
+    loss_type: "standard"        # "standard" 或 "auxiliary"
+
+  # 对抗损失（阶段4添加）
+  adversarial:
+    enabled: false
+    weight: 0.1
+
+  # 重建损失（可选）
+  reconstruction:
+    enabled: false
+    weight: 0.5
+
+# ============================================================================
+# 保存配置
+# ============================================================================
+save:
+  output_dir: "./outputs/moe_lora_single_route"
+  save_every_n_epochs: 2
+  keep_last_n_checkpoints: 3
+  save_optimizer_state: true
+
+# ============================================================================
+# 验证配置
+# ============================================================================
+validation:
+  enabled: true
+  every_n_epochs: 2
+  num_samples: 4
+  save_images: true
+
+# ============================================================================
+# 日志配置
+# ============================================================================
+logging:
+  log_every_n_steps: 10
+  use_tensorboard: false
+  use_wandb: false
+
+# ============================================================================
+# 显存优化（阶段5实现）
+# ============================================================================
+memory_optimization:
+  enabled: false
+  gradient_checkpointing: false
+  quantization:
+    enabled: false
+  offload:
+    vae_to_cpu: false
+    text_encoder_to_cpu: false
+  cache:
+    enabled: false
+
+# ==============================================================================
+# 使用说明
+# ==============================================================================
+#
+# 1. Mock FLUX测试（推荐用于开发和调试）：
+#    python train_lora.py --config configs/examples/single_route_moe.yaml --use-mock
+#
+# 2. 真实FLUX训练：
+#    - 修改 model.base_model 为 "black-forest-labs/FLUX.1-dev"
+#    - 修改 model.dtype 为 "bfloat16"
+#    - 修改 data.resolution 为 512 或 1024
+#    - 修改 train.mixed_precision 为 true
+#    然后运行：
+#    python train_lora.py --config configs/examples/single_route_moe.yaml
+#
+# 3. 监控负载均衡：
+#    训练过程中会输出每个专家的使用率统计，确保专家被均匀使用
+#
+# 4. 调整专家数量：
+#    - 修改 lora.moe.num_experts（常用值：4, 6, 8）
+#    - 修改 lora.moe.router.top_k（通常为num_experts的1/2）
+#
+# ==============================================================================

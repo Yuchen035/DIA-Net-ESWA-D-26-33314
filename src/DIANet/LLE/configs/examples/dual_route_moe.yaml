@@ -1,0 +1,269 @@
+# ==============================================================================
+# MoE-LoRA双路由模式配置示例
+# ==============================================================================
+#
+# 此配置演示如何使用MoE-LoRA双路由模式训练低光增强模型
+#
+# 特点：
+# - Style-Specific路由：根据曝光度类别硬编码选择专家
+# - Style-Shared路由：使用可学习分类器动态选择共享专家
+# - 自动曝光度分类
+# - 适合暗光图像增强任务
+# ==============================================================================
+
+# ============================================================================
+# 基础配置
+# ============================================================================
+job_name: "moe_lora_dual_route_test"
+device: "cuda"
+gpu_id: 0
+seed: 42
+
+# ============================================================================
+# 模型配置
+# ============================================================================
+model:
+  # 使用Mock FLUX进行测试（快速验证）
+  # 如需使用真实FLUX，改为 "black-forest-labs/FLUX.1-dev"
+  base_model: "mock-flux-dev"
+  dtype: "float32"  # Mock FLUX使用float32；真实FLUX使用bfloat16
+
+# ============================================================================
+# LoRA配置 - MoE双路由模式
+# ============================================================================
+lora:
+  # 使用module_modes进行细粒度控制
+  module_modes:
+    # Mock FLUX的blocks使用MoE-LoRA（双路由）
+    "blocks.0.0": "moe"
+    "blocks.1.0": "moe"
+    "blocks.2.0": "moe"
+    "blocks.3.0": "moe"
+
+    # 其他层冻结
+    "*": "freeze"
+
+  # LoRA基础参数
+  rank: 16
+  alpha: 16.0
+  dropout: 0.0
+  init_method: "kaiming"
+
+  # MoE-LoRA配置（双路由模式）
+  moe:
+    enabled: true
+    routing_mode: "dual"           # 双路由模式
+
+    # Specific专家配置（基于曝光度类别）
+    num_specific_experts: 5        # 5个specific专家，对应5个曝光类别：
+                                   # 0: extremely_dark (极暗)
+                                   # 1: very_dark (很暗)
+                                   # 2: dark (暗)
+                                   # 3: moderate (中等)
+                                   # 4: normal (正常)
+
+    # Shared专家配置（动态学习选择）
+    num_shared_experts: 4          # 4个shared专家
+    shared_top_k: 2                # Shared路由选择Top-2专家
+
+    # Specific Router配置（硬编码路由）
+    specific_router:
+      type: "specific"             # 使用SpecificRouter
+      # 无需额外配置，直接根据exposure_category选择专家
+
+    # Shared Router配置（可学习路由）
+    shared_router:
+      type: "shared"               # 使用SharedRouter
+      hidden_dim: 512              # 分类器隐藏层维度
+      # 注意：Shared Router会动态学习如何选择共享专家
+
+# ============================================================================
+# 数据配置
+# ============================================================================
+data:
+  # 数据集路径
+  train_data_dir: "./data/train"
+  input_image_dir: "input"         # 低光图像目录
+  target_image_dir: "target"       # 正常光照图像目录
+
+  # 图像设置
+  resolution: 256                  # Mock FLUX使用256；真实FLUX使用512或1024
+  center_crop: true
+  random_flip: true
+
+  # 曝光度分类配置（双路由模式必需）
+  classify_exposure_category: true
+  exposure_method: "mean_brightness"  # 分类方法：mean_brightness/histogram/percentile
+  exposure_thresholds: [0.1, 0.2, 0.3, 0.5]  # 5个类别的阈值
+
+  # DataLoader设置
+  batch_size: 2
+  num_workers: 4
+  pin_memory: true
+
+# ============================================================================
+# 训练配置
+# ============================================================================
+train:
+  # 训练轮数
+  num_epochs: 10
+
+  # 优化器
+  optimizer:
+    type: "adamw"
+    learning_rate: 1.0e-4
+    weight_decay: 0.01
+    betas: [0.9, 0.999]
+
+  # 学习率调度
+  lr_scheduler:
+    type: "cosine"
+    warmup_steps: 100
+
+  # 梯度相关
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+
+  # 其他训练参数
+  max_sequence_length: 512         # T5最大序列长度
+  cfg_scale: 3.5                   # Classifier-free guidance scale
+
+  # Mixed precision
+  mixed_precision: false           # Mock FLUX不需要；真实FLUX使用true
+
+# ============================================================================
+# 损失函数配置
+# ============================================================================
+loss:
+  # Flow Matching Loss（主损失）
+  flow_matching:
+    weight: 1.0
+    weighting_scheme: "uniform"    # "uniform" 或 "logit_normal"
+
+  # 负载均衡损失（仅对Shared专家）
+  load_balance:
+    enabled: true
+    weight: 0.01                   # 负载均衡损失权重
+    loss_type: "standard"          # "standard" 或 "auxiliary"
+    apply_to: "shared_only"        # 仅应用于共享专家（specific专家由类别决定）
+
+  # 对抗损失（阶段4添加）
+  adversarial:
+    enabled: false
+    weight: 0.1
+
+  # 重建损失（可选）
+  reconstruction:
+    enabled: false
+    weight: 0.5
+
+# ============================================================================
+# 保存配置
+# ============================================================================
+save:
+  output_dir: "./outputs/moe_lora_dual_route"
+  save_every_n_epochs: 2
+  keep_last_n_checkpoints: 3
+  save_optimizer_state: true
+
+# ============================================================================
+# 验证配置
+# ============================================================================
+validation:
+  enabled: true
+  every_n_epochs: 2
+  num_samples: 4
+  save_images: true
+
+# ============================================================================
+# 日志配置
+# ============================================================================
+logging:
+  log_every_n_steps: 10
+  use_tensorboard: false
+  use_wandb: false
+
+# ============================================================================
+# 显存优化（阶段5实现）
+# ============================================================================
+memory_optimization:
+  enabled: false
+  gradient_checkpointing: false
+  quantization:
+    enabled: false
+  offload:
+    vae_to_cpu: false
+    text_encoder_to_cpu: false
+  cache:
+    enabled: false
+
+# ==============================================================================
+# 双路由模式说明
+# ==============================================================================
+#
+# 双路由机制：
+# 1. Specific Router（硬编码）
+#    - 根据输入图像的曝光度类别（0-4）直接选择对应的specific专家
+#    - 每个曝光度类别有专属的专家，专门处理该类型的增强任务
+#    - 例如：extremely_dark图像 -> 专家0，very_dark图像 -> 专家1
+#
+# 2. Shared Router（可学习）
+#    - 使用分类器网络动态选择shared专家
+#    - Shared专家学习通用的增强策略，跨曝光类别共享
+#    - 选择Top-K个shared专家（默认K=2）
+#
+# 3. 输出组合
+#    - 最终输出 = Specific专家输出 + Shared专家加权输出
+#    - 既有针对性（specific）又有泛化性（shared）
+#
+# ==============================================================================
+# 使用说明
+# ==============================================================================
+#
+# 1. Mock FLUX测试（推荐用于开发和调试）：
+#    python train_lora.py --config configs/examples/dual_route_moe.yaml --use-mock
+#
+# 2. 真实FLUX训练：
+#    - 修改 model.base_model 为 "black-forest-labs/FLUX.1-dev"
+#    - 修改 model.dtype 为 "bfloat16"
+#    - 修改 data.resolution 为 512 或 1024
+#    - 修改 train.mixed_precision 为 true
+#    然后运行：
+#    python train_lora.py --config configs/examples/dual_route_moe.yaml
+#
+# 3. 监控曝光度分布：
+#    - 训练开始前会打印数据集的曝光度分布统计
+#    - 确保每个曝光类别都有足够的样本
+#
+# 4. 监控专家使用：
+#    - Specific专家：查看每个曝光类别的样本分布
+#    - Shared专家：查看负载均衡统计，确保专家被均匀使用
+#
+# 5. 调整曝光度分类：
+#    - 修改 data.exposure_thresholds 调整类别边界
+#    - 修改 data.exposure_method 选择不同的分类方法
+#      * mean_brightness: 简单快速，基于平均亮度
+#      * histogram: 权重偏向暗部，对暗光图像更敏感
+#      * percentile: 鲁棒性好，不受极值影响
+#
+# 6. 调整专家数量：
+#    - num_specific_experts: 通常与曝光类别数相同（5）
+#    - num_shared_experts: 常用值4-8
+#    - shared_top_k: 通常为num_shared_experts的1/2
+#
+# ==============================================================================
+# 与单路由模式的区别
+# ==============================================================================
+#
+# 单路由模式 (single):
+#   - 所有样本使用同一组专家
+#   - Router动态学习选择专家
+#   - 适合通用任务
+#
+# 双路由模式 (dual):
+#   - Specific专家：针对不同曝光类别的专属专家
+#   - Shared专家：跨类别共享的通用专家
+#   - 适合有明确子任务划分的场景（如低光增强）
+#   - 更强的针对性和泛化性
+#
+# ==============================================================================

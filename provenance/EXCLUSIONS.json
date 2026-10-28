@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "package_version": "0.2.0",
+  "source_archive": "第二篇工作.zip",
+  "source_project_prefix": "第二篇工作/DIANet/",
+  "scope": "Deliberate omissions from the source submission candidate. Paths below are relative to the original project prefix. This is a classified exclusion record, not a claim that every omitted byte is scientifically irrelevant.",
+  "author_tests": [
+    {
+      "path": "test/test_exposure.py",
+      "reason": "Author test for the retained five-level brightness classifier; not the manuscript four-class semantic perceiver or formal benchmark evaluator.",
+      "status": "Omitted, not executed; may be retained separately for engineering work."
+    },
+    {
+      "path": "test/test_memory_optimization.py",
+      "reason": "Author memory-optimization tests include model/GPU operations outside this source-preparation validation scope.",
+      "status": "Omitted, not executed."
+    },
+    {
+      "path": "test/test_real_flux_loader.py",
+      "reason": "Author FLUX loader tests can load model resources and use GPU; not a lightweight package check.",
+      "status": "Omitted, not executed."
+    }
+  ],
+  "partial_lora_exports": [
+    {
+      "path": "LLE/outputs/small_test/lora_final.safetensors",
+      "size_bytes": 296200,
+      "sha256": "64a9fb765290865c80601ec4a70cabb3df8a398638b1fecda98e0f232398f915",
+      "inspection": "Standard-library safetensors JSON-header reading only; no tensor or pickle deserialization.",
+      "header_summary": {
+        "tensor_count": 12,
+        "dtype": "F16",
+        "rank": 4,
+        "parameter_count": 147456,
+        "modules": "Q/K/V LoRA A/B for block 0 of both single_transformer_blocks and transformer_blocks",
+        "metadata_present": false,
+        "expert_or_router_keys_present": false
+      },
+      "context": "LLE/train_with_quantization.log:193-206 records an error followed by a save to this path; LLE/final_training.log also records an error followed by a save to the same path. The logs specify Mock=False.",
+      "reason": "Partial LoRA export associated with a debugging path, not authenticated as the manuscript checkpoint. Small size alone is not the basis for this classification."
+    },
+    {
+      "path": "LLE/outputs/test_lora_rank1/lora_final.safetensors",
+      "size_bytes": 37528,
+      "sha256": "18aabba3c0919aacfb56f4c3083eb7be36f6bfe9d74b01cc906455c8e1ee2b81",
+      "inspection": "Standard-library safetensors JSON-header reading only; no tensor or pickle deserialization.",
+      "header_summary": {
+        "tensor_count": 6,
+        "dtype": "F16",
+        "rank": 1,
+        "parameter_count": 18432,
+        "modules": "Q/K/V LoRA A/B for single_transformer_blocks block 0",
+        "metadata_present": false,
+        "expert_or_router_keys_present": false
+      },
+      "context": "LLE/train_test.log:154-167 and LLE/train_test2.log:158-171 record errors followed by saves to this path. The logs specify Mock=False; configs/test_lora_rank1.yaml describes a random-noise test.",
+      "reason": "Partial LoRA export associated with a debugging path, not authenticated as the manuscript checkpoint. Small size alone is not the basis for this classification."
+    }
+  ],
+  "checkpoint_qualification": "Matching log output paths do not authenticate which run last wrote the archived bytes. The headers lack training/model identity metadata. Neither export is classified as Mock-generated, and neither establishes availability of the complete manuscript checkpoint.",
+  "historical_author_material": {
+    "paths": [
+      "LLE/FIX_PLAN.md",
+      "LLE/TEST_SUMMARY.md",
+      "LLE/final_training.log",
+      "LLE/train_final.log",
+      "LLE/train_output.log",
+      "LLE/train_test.log",
+      "LLE/train_test2.log",
+      "LLE/train_test_final.log",
+      "LLE/train_with_quantization.log",
+      "ICEdit/ICEdit_library_modifications_report.md",
+      "ICEdit/simplified_lora_moe_guide.md",
+      "ICEdit/lora_math_verification.md"
+    ],
+    "reason": "Historical debugging and planning material is useful for the authors' audit trail but is not a verified execution guide or proof of manuscript reproduction. Relevant limitations and implementation correspondence are disclosed in the reviewer documentation."
+  },
+  "other_categories": [
+    {
+      "paths": ["peft/.git/", "diffusers/.git/", "ICEdit/.git/", "PhotoDoodle/.git/", "Learning/"],
+      "reason": "Repository internals and educational/reference material are not needed for the retained entry points. Supplied repository identifiers and pertinent notices are recorded separately."
+    },
+    {
+      "paths": ["peft/examples/", "peft/tests/", "peft/docs/", "diffusers/examples/", "diffusers/tests/", "diffusers/docs/"],
+      "reason": "Upstream examples, tests and documentation are omitted; complete non-cache runtime src trees, package resources and necessary installation metadata are retained."
+    },
+    {
+      "paths": ["ICEdit/", "PhotoDoodle/"],
+      "reason": "Complete reference checkouts are omitted; their license texts and provenance are retained. No direct runtime import from these checkouts was found. This does not rule out implementation adaptation; ICEdit correspondence is documented in docs/THIRD_PARTY_NOTICES.md."
+    },
+    {
+      "paths": ["LLE/data/", "test/input/", "test/output/", "**/__pycache__/", "**/*.pyc"],
+      "reason": "Test/generated images and interpreter caches are excluded. No formal manuscript dataset/split or successful experiment is inferred from these assets."
+    }
+  ],
+  "limits": "No model execution was needed to classify these omissions. This record does not imply that the remaining source fully implements the paper, nor that omitted weights or logs must be recreated through new experiments."
+}

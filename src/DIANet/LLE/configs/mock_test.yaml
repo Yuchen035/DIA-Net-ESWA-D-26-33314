@@ -1,0 +1,49 @@
+# Mock FLUX测试配置
+# 用于快速测试训练流程，无需下载真实模型
+
+# 模型配置
+model:
+  base_model: "mock-flux-dev"  # Mock模型（会被--use_mock覆盖）
+  dtype: "float32"  # 使用float32便于测试
+  low_cpu_mem_usage: false
+
+# 数据配置
+data:
+  input_image_dir: "./test_data/input"  # 测试输入图像
+  target_image_dir: "./test_data/target"  # 测试目标图像
+  prompt: "enhance the image"
+  resolution: 256  # 较小的分辨率用于快速测试
+  center_crop: false
+  random_flip: false
+  num_workers: 0  # 单线程测试
+
+# LoRA配置
+lora:
+  # Mock FLUX的简单结构
+  target_modules:
+    - "blocks.*.0"  # Mock transformer的blocks
+
+  rank: 8  # 较小的rank
+  alpha: 8.0
+  dropout: 0.0
+  init_method: "kaiming"
+
+# 训练配置
+train:
+  num_epochs: 2  # 只训练2个epoch用于测试
+  batch_size: 2
+  learning_rate: 1.0e-4
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  max_sequence_length: 512
+  save_every_n_epochs: 1  # 每个epoch都保存
+  cfg_scale: 3.5
+
+# 保存配置
+save:
+  output_dir: "./test_outputs"
+  save_dtype: "float32"
+  save_total_limit: 2
+
+# 设备配置
+device: "cuda"  # 如果没有CUDA，会自动降级到CPU

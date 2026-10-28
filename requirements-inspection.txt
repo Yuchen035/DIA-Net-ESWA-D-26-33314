@@ -1,0 +1,2 @@
+# Python 3.10+ only. The tools/review.py inspection and dry-run modes use the
+# standard library and deliberately do not import PyTorch or model libraries.

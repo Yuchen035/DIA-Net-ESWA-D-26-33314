@@ -1,0 +1,66 @@
+{
+  "scope": "AST, guarded wrapper plans, isolated optimizer factory, byte comparison",
+  "checks": [
+    {
+      "check": "all packaged Python sources parse",
+      "passed": true,
+      "files": 1062
+    },
+    {
+      "check": "review check with model-import/process guards",
+      "passed": true,
+      "parsed": 19
+    },
+    {
+      "check": "unresolved example prints dry-run plan",
+      "passed": true,
+      "issues": 12
+    },
+    {
+      "check": "unresolved example refuses execution before child process",
+      "passed": true
+    },
+    {
+      "check": "base-model-only flag forwarded in dry-run plan",
+      "passed": true,
+      "image_decoded": false
+    },
+    {
+      "check": "no implicit base-model inference option",
+      "passed": true
+    },
+    {
+      "check": "missing adapter produces preflight issue without model imports",
+      "passed": true
+    },
+    {
+      "check": "AdamW8bit dependency error cannot select AdamW automatically",
+      "passed": true,
+      "real_optimizer_created": false
+    },
+    {
+      "check": "main Trainer methods unchanged except validation serialization",
+      "passed": true,
+      "changed_methods": [
+        "_run_validation"
+      ]
+    },
+    {
+      "check": "vendor distributions byte-identical to v01",
+      "passed": true,
+      "files": {
+        "peft": 193,
+        "diffusers": 780
+      }
+    },
+    {
+      "check": "entrypoint import precedence is not overwritten by saver/trainer",
+      "passed": true
+    }
+  ],
+  "passed": 11,
+  "training_or_inference": false,
+  "model_imports": false,
+  "gpu_used": false,
+  "environment_modified": false
+}

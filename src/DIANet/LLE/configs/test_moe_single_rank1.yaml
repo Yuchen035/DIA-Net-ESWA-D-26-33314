@@ -1,0 +1,67 @@
+# 测试配置 - 标准MoE LoRA模式（rank=1）
+# 使用随机噪声数据集测试
+
+model:
+  base_model: "../FLUX.1-dev"  # 使用本地模型路径
+  dtype: "bfloat16"
+  low_cpu_mem_usage: true
+
+  # PhotoDoodle预训练权重
+  photodoodle:
+    enabled: true
+    lora_path: "../lora_model"
+    lora_weight_name: "pretrain.safetensors"
+    fuse_before_training: true
+    save_fused_model: false
+
+data:
+  input_image_dir: "./data/test_random/input"
+  target_image_dir: "./data/test_random/target"
+  prompt: "enhance the low-light image, improve brightness and details"
+  resolution: 512
+  center_crop: false
+  random_flip: false
+  num_workers: 0
+
+lora:
+  # 标准MoE LoRA模式（单路由）
+  mode: "moe_single"  # standard / moe_single / moe_dual
+
+  target_modules:
+    - "single_transformer_blocks.0.attn.to_q"
+    - "single_transformer_blocks.0.attn.to_k"
+    - "single_transformer_blocks.0.attn.to_v"
+
+  rank: 1  # 每个expert的rank
+  alpha: 1.0
+  dropout: 0.0
+  init_method: "kaiming"
+
+  # MoE配置
+  moe:
+    num_experts: 4  # 专家数量
+    top_k: 2  # 激活的专家数
+    expert_rank: 1  # 每个专家的rank
+    expert_alpha: 1.0
+    load_balance_weight: 0.01  # 负载均衡损失权重
+
+train:
+  num_epochs: 2  # 快速测试
+  batch_size: 1
+  learning_rate: 1.0e-4
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  max_sequence_length: 512
+  save_every_n_epochs: 1
+  cfg_scale: 3.5
+
+save:
+  output_dir: "./outputs/test_moe_single_rank1"
+  save_dtype: "float16"
+  save_total_limit: 2
+
+device: "cuda"
+
+# 显存优化
+quantize: true
+gradient_checkpointing: true

@@ -1,0 +1,91 @@
+{
+  "scope": "standard-library fake-object protocol checks and AST only",
+  "checks": [
+    {
+      "check": "fake serializer/model raw-key round trip",
+      "passed": true,
+      "loaded_tensor_count": 11,
+      "real_model_round_trip": false
+    },
+    {
+      "check": "existing checkpoint overwrite",
+      "passed": true,
+      "rejection": "Refusing to overwrite an existing checkpoint or sidecar."
+    },
+    {
+      "check": "existing target adapter",
+      "passed": true,
+      "rejection": "Load into a clean transformer; multiple adapters are unsupported."
+    },
+    {
+      "check": "multiple adapters",
+      "passed": true,
+      "rejection": "Saving requires exactly the requested single adapter."
+    },
+    {
+      "check": "base architecture mismatch",
+      "passed": true,
+      "rejection": "Checkpoint and base-model architecture configurations differ."
+    },
+    {
+      "check": "reconstructed tensor shape mismatch",
+      "passed": true,
+      "rejection": "Adapter shape differs from reconstructed model: transformer_blocks.0.attn.to_q.lora_A.default.weight"
+    },
+    {
+      "check": "missing adapter key reported by loader",
+      "passed": true,
+      "rejection": "Adapter restore incomplete: missing=['transformer_blocks.0.attn.to_q.lora_A.default.weight']; unexpected=[]"
+    },
+    {
+      "check": "weight hash mismatch",
+      "passed": true,
+      "rejection": "Checkpoint SHA-256 does not match its sidecar."
+    },
+    {
+      "check": "unknown legacy format",
+      "passed": true,
+      "rejection": "Unsupported adapter checkpoint format/version."
+    },
+    {
+      "check": "empty tensor declaration",
+      "passed": true,
+      "rejection": "Checkpoint contains no declared adapter tensors."
+    },
+    {
+      "check": "tensor key declaration mismatch",
+      "passed": true,
+      "rejection": "Checkpoint tensor keys do not match the sidecar."
+    },
+    {
+      "check": "missing MoE configuration",
+      "passed": true,
+      "rejection": "Missing adapter configuration fields: num_experts"
+    },
+    {
+      "check": "sidecar tensor shape mismatch",
+      "passed": true,
+      "rejection": "Checkpoint tensor shape/dtype differs from declaration: transformer_blocks.0.attn.to_q.lora_A.default.weight"
+    },
+    {
+      "check": "legacy weights without sidecar",
+      "passed": true,
+      "rejection": "Missing v02 sidecar: <WORKSPACE>\\work\\v02_checks\\adapter-contract-kmkbjnw8\\adapter.safetensors.json. Legacy checkpoints are not inferred or silently loaded."
+    },
+    {
+      "check": "CLI legacy refusal before model import",
+      "passed": true,
+      "rejection": "Missing v02 sidecar: <WORKSPACE>\\work\\v02_checks\\adapter-contract-kmkbjnw8\\adapter.safetensors.json. Legacy checkpoints are not inferred or silently loaded."
+    },
+    {
+      "check": "CLI help without model imports",
+      "passed": true
+    }
+  ],
+  "passed": 16,
+  "real_model_libraries_imported": false,
+  "real_safetensors_io": false,
+  "real_model_round_trip": false,
+  "training_or_inference": false,
+  "gpu_used": false
+}
